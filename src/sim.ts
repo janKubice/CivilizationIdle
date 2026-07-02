@@ -5,10 +5,10 @@ import { clamp, lerp, bus, key, hash2 } from './util';
 import { B_WATER, B_MOUNTAIN } from './config';
 import {
   RES, B, BUILDINGS, TECHS, TECH_BY, UPGRADES, UPG_BY, ACHS, ACH_BONUS,
-  PERKS, PERK_BY, NODE_DEFS, Rec,
+  PERKS, PERK_BY, NODE_DEFS, ADJ_RULES, Rec,
 } from './data';
 import {
-  Game, GameState, baseMults, newState, initGame, recount,
+  Game, GameState, baseMults, newState, initGame, recount, rebuildOccupancy,
   countB, slots, activeWorkers, sumAssigned, housingCap, waterCap, capOf,
 } from './state';
 import { NodeInst } from './worldgen';
@@ -76,18 +76,27 @@ function toolMult(g: Game): number {
   return 1 + g.m.toolPower * cov;
 }
 
-function haulEffOf(d: number, range: number): number {
+export function haulEffOf(d: number, range: number): number {
   return 1 / (1 + Math.max(0, d - 2) / range);
 }
 
-/** průměrná dopravní efektivita budov daného typu */
-function haulEff(g: Game, t: string): number {
-  let sum = 0, n = 0;
-  for (const b of g.s.buildings) {
-    if (b.t !== t) continue;
-    sum += haulEffOf(b.d ?? 0, g.m.haulRange); n++;
+/** adjacency bonus podle okolí (počítá se při stavbě, cache v BuildingInst.adj) */
+export function computeAdj(g: Game, t: string, x: number, y: number, size: number): number {
+  const rule = ADJ_RULES[t];
+  if (!rule) return 1;
+  let count = 0;
+  for (let ty = y - 3; ty < y + size + 3; ty++) {
+    for (let tx = x - 3; tx < x + size + 3; tx++) {
+      if (tx >= x && tx < x + size && ty >= y && ty < y + size) continue;
+      if (rule.water) {
+        if (g.world.biomeAt(tx, ty) === B_WATER) count++;
+      } else if (rule.kinds) {
+        const n = g.world.nodeAt(tx, ty);
+        if (n && rule.kinds.includes(n.kind)) count++;
+      }
+    }
   }
-  return n ? sum / n : 1;
+  return Math.min(rule.cap, 1 + rule.per * count);
 }
 
 function computeHaulDist(g: Game, b: { x: number; y: number }): number {
@@ -127,12 +136,27 @@ export function tick(g: Game, dt: number) {
   g.capMult = (1 + 0.75 * countB(g, 'storehouse')) * m.capacity;
 
   const delta: Rec = {};
+  const gross: Rec = {};   // hrubá produkce (totals — skóre, achievementy)
   const avail = (r: string) => (s.res[r] || 0) + (delta[r] || 0);
-  const add = (r: string, v: number) => { delta[r] = (delta[r] || 0) + v; };
+  const add = (r: string, v: number) => {
+    delta[r] = (delta[r] || 0) + v;
+    if (v > 0) gross[r] = (gross[r] || 0) + v;
+  };
 
   // spokojenost (levné, počítá se každý tick)
   computeHappiness(g, festHap);
   const prodF = (0.5 + 0.5 * g.happiness) * frenzy * m.global;
+
+  // per-typ faktor: doprava × adjacency (jeden průchod přes budovy)
+  const tf: Record<string, { s: number; n: number }> = {};
+  for (const b of s.buildings) {
+    const bd = B[b.t];
+    if (!bd?.jobs || bd.noHaul) continue;
+    const f = haulEffOf(b.d ?? 0, m.haulRange) * (b.adj || 1);
+    const e = tf[b.t] || (tf[b.t] = { s: 0, n: 0 });
+    e.s += f; e.n++;
+  }
+  const typeF = (t: string) => { const e = tf[t]; return e && e.n ? e.s / e.n : 1; };
 
   // --- energie (elektrárny první, továrny podle throttle) ---
   const fusion = hasTech(s, 'fusion');
@@ -164,7 +188,7 @@ export function tick(g: Game, dt: number) {
 
     let mult = (m.job[def.id] || 1) * prodF;
     if (def.raw) mult *= m.gather * tMult;
-    if (!def.noHaul) mult *= haulEff(g, def.id);
+    if (!def.noHaul) mult *= typeF(def.id);
     if (def.energyUse) mult *= throttle;
 
     if (def.prod) {
@@ -198,8 +222,8 @@ export function tick(g: Game, dt: number) {
   if (working > 0 && (s.res.tools || 0) > 0) add('tools', -working * 0.0006 * dt);
 
   // --- aplikace delty s limity skladů ---
+  for (const [r, v] of Object.entries(gross)) s.totals[r] = (s.totals[r] || 0) + v;
   for (const [r, v] of Object.entries(delta)) {
-    if (v > 0) s.totals[r] = (s.totals[r] || 0) + v;
     const cap = capOf(g, r);
     s.res[r] = clamp((s.res[r] || 0) + v, 0, cap);
     // vyhlazený rate pro UI
@@ -299,7 +323,21 @@ export function slowTick(g: Game, seconds: number, rand: () => number) {
       }
     } catch { /* podmínka nesmí shodit hru */ }
   }
+
+  // upozornění na plné sklady (throttled per surovina)
+  const now2 = Date.now();
+  for (const r of RES) {
+    const cap = capOf(g, r.id);
+    if (!isFinite(cap)) continue;
+    if ((s.res[r.id] || 0) >= cap * 0.995 && (g.rates[r.id] || 0) > 0.01) {
+      if ((storageWarn[r.id] || 0) + 120000 < now2) {
+        storageWarn[r.id] = now2;
+        bus.emit('storageFull', { res: r.id });
+      }
+    }
+  }
 }
+const storageWarn: Rec = {};
 
 function autoAssign(g: Game) {
   const s = g.s;
@@ -451,16 +489,42 @@ export function pay(g: Game, cost: Rec) {
 
 function placeBuilding(g: Game, t: string, tx: number, ty: number, auto: boolean) {
   const def = B[t];
-  const inst = auto ? { t, x: tx, y: ty, auto: 1 as const } : { t, x: tx, y: ty };
+  const inst: import('./state').BuildingInst = auto ? { t, x: tx, y: ty, auto: 1 } : { t, x: tx, y: ty };
   g.s.buildings.push(inst);
   const idx = g.s.buildings.length - 1;
   for (let dy = 0; dy < def.size; dy++) for (let dx = 0; dx < def.size; dx++) g.world.occ.set(key(tx + dx, ty + dy), idx);
   recount(g);
-  if (def.jobs && !def.noHaul) (inst as any).d = computeHaulDist(g, inst);
+  if (def.jobs && !def.noHaul) inst.d = computeHaulDist(g, inst);
+  const adj = computeAdj(g, t, tx, ty, def.size);
+  if (adj > 1.001) inst.adj = Math.round(adj * 100) / 100;
   if (t === 'storehouse') recomputeAllHaul(g);
   if (t === 'trainStation') recomputeMults(g);
   autoConnectRoad(g, tx, ty);
   g.runtime.agentsDirty = true;
+  if (!auto && adj > 1.001) bus.emit('adj', { t, mult: adj, label: ADJ_RULES[t]?.label || '' });
+}
+
+/** zboření budovy s 50% refundací */
+export function demolish(g: Game, idx: number): string | null {
+  const s = g.s;
+  const inst = s.buildings[idx];
+  if (!inst) return 'Budova neexistuje.';
+  const def = B[inst.t];
+  if (def.unbuildable) return 'Náves zbourat nejde.';
+  const n = Math.max(0, countB(g, inst.t) - 1);
+  const refund: Rec = {};
+  for (const [r, v] of Object.entries(def.cost)) refund[r] = Math.floor(v * Math.pow(1.12, n) * 0.5);
+  s.buildings.splice(idx, 1);
+  rebuildOccupancy(g);
+  recount(g);
+  for (const [r, v] of Object.entries(refund)) s.res[r] = Math.min(capOf(g, r), (s.res[r] || 0) + v);
+  const sl = slots(g, inst.t);
+  if ((s.assigned[inst.t] || 0) > sl) s.assigned[inst.t] = sl;
+  if (inst.t === 'storehouse') recomputeAllHaul(g);
+  if (inst.t === 'trainStation') recomputeMults(g);
+  g.runtime.agentsDirty = true;
+  bus.emit('demolished', { t: inst.t, refund });
+  return null;
 }
 
 /** pokus o stavbu hráčem; vrací chybovou hlášku nebo null při úspěchu */

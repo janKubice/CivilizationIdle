@@ -23,8 +23,9 @@ function ensure(): boolean {
 
 export function applyVolumes() {
   if (!ctx) return;
-  sfxGain.gain.value = g?.s.settings.sfx ?? 0.7;
-  musGain.gain.value = (g?.s.settings.music ?? 0.4) * 0.16;
+  const mute = g?.s.settings.muted ? 0 : 1;
+  sfxGain.gain.value = (g?.s.settings.sfx ?? 0.7) * mute;
+  musGain.gain.value = (g?.s.settings.music ?? 0.4) * 0.16 * mute;
 }
 
 /** krátký syntetický tón */
@@ -158,5 +159,14 @@ export function initAudio(game: Game) {
   bus.on('error', () => {
     if (!ctx || !throttled('err', 200)) return;
     blip(140, 0.15, 'square', 0.1, -40);
+  });
+  bus.on('demolished', () => {
+    if (!ctx || !throttled('dem', 150)) return;
+    blip(110, 0.2, 'square', 0.14, -60);
+    blip(80, 0.25, 'triangle', 0.12, -30, 0.08);
+  });
+  bus.on('storageFull', () => {
+    if (!ctx || !throttled('full', 2000)) return;
+    blip(520, 0.09, 'sine', 0.08); blip(390, 0.12, 'sine', 0.08, 0, 0.1);
   });
 }

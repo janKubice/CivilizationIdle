@@ -6,7 +6,7 @@ import { RES, RES_BY, B, BUILDINGS, TECHS, TECH_BY, UPGRADES, UPG_BY, ACHS, PERK
 import { Game, slots, activeWorkers, sumAssigned, housingCap, waterCap, capOf } from './state';
 import {
   buildCost, canAfford, upgradeCost, buyTech, buyUpgrade, setAssign, hasTech, techAvailable,
-  ascendGain, ascensionUnlocked, civScore, perkCost, buyPerk, doAscend, OfflineSummary,
+  ascendGain, ascensionUnlocked, civScore, perkCost, buyPerk, doAscend, demolish, haulEffOf, OfflineSummary,
 } from './sim';
 import { saveGame, exportSave, importSave, hardReset, hasSave } from './save';
 import type { Renderer } from './render';
@@ -64,6 +64,40 @@ export function showOffline(sum: OfflineSummary) {
     <p>Civilizace mezitím pracovala (${fmtTime(sum.effSeconds)} efektivního času):</p>
     <div style="display:flex;flex-direction:column;gap:3px;font-size:13.5px">${rows}</div>`,
     [{ label: 'Pokračovat' }]);
+}
+
+// ---------- info o budově (klik do mapy) ----------
+export function showBuildingInfo(idx: number) {
+  const inst = g.s.buildings[idx];
+  if (!inst) return;
+  const def = B[inst.t];
+  let body = `<h3>${def.icon} ${esc(def.name)}${inst.auto ? ' <span class="badge">postaveno městem</span>' : ''}</h3>
+    <p>${esc(def.desc)}</p>`;
+  const rows: string[] = [];
+  if (def.jobs) {
+    rows.push(`👷 Pracovníci typu: <b>${g.s.assigned[inst.t] || 0}</b> / ${slots(g, inst.t)} (tato budova: ${def.jobs} míst)`);
+    if (!def.noHaul) {
+      const eff = haulEffOf(inst.d ?? 0, g.m.haulRange);
+      rows.push(`🚚 Doprava: <b>${Math.round(eff * 100)} %</b> (vzdálenost ${inst.d ?? 0} od skladu)`);
+    }
+    if (inst.adj && inst.adj > 1) rows.push(`🧭 Bonus sousedství: <b style="color:#7ee787">+${Math.round((inst.adj - 1) * 100)} %</b>`);
+  }
+  if (def.housing) rows.push(`🏠 Bydlení: +${def.housing}`);
+  if (def.water) rows.push(`💧 Voda pro ${def.water} lidí`);
+  if (def.hap) rows.push(`😊 Spokojenost: +${Math.round(def.hap * 100)} %`);
+  if (def.capBoost) rows.push(`📦 Kapacita skladů: +75 %`);
+  if (rows.length) body += `<p style="line-height:1.7">${rows.join('<br>')}</p>`;
+
+  const btns: { label: string; cls?: string; cb?: () => void }[] = [{ label: 'Zavřít' }];
+  if (!def.unbuildable) {
+    btns.unshift({
+      label: '🗑️ Zbourat (vrátí ~50 %)', cls: 'warn', cb: () => {
+        const err = demolish(g, idx);
+        if (err) { toast('⚠️ ' + err); bus.emit('error'); }
+      },
+    });
+  }
+  showModal(body, btns);
 }
 
 // ---------- title screen ----------
@@ -372,6 +406,18 @@ function showSettings() {
   const stats = el('p', '', `⏱️ Odehráno: ${fmtTime(g.s.playtime / 1000)} · 👆 kliků: ${fmt(g.s.stats.lifetimeClicks)} · 👥 rekord: ${g.s.stats.peakPop} · ✨ vzestupů: ${g.s.stats.ascensions || 0}`);
   m.appendChild(stats);
 
+  const helpBtn = el('button', '', '❓ Jak hrát') as HTMLButtonElement;
+  helpBtn.onclick = () => {
+    back.remove();
+    showModal(`<h3>❓ Jak hrát</h3>
+      <p><b>Smyčka:</b> klikej na suroviny (stromy 🌳, keře, balvany) → stav budovy <b>[B]</b> → přiřaď lidem práci <b>[P]</b> → plň potřeby (jídlo, bydlení, voda, spokojenost) → přicházejí noví lidé → zkoumej technologie <b>[T]</b> a kupuj vylepšení <b>[U]</b>.</p>
+      <p><b>Ovládání:</b> tažení myší / WASD = posun mapy · kolečko = zoom · klik na budovu = detail a bourání · Esc = zavřít/zrušit.</p>
+      <p><b>Tipy:</b> stav pily u lesa a doly u žil — dostaneš <b>bonus sousedství</b>. Vzdálené budovy mají pomalejší dopravu, pomůžou skladiště a dopravní technologie. Hlídej 🌟 zlaté občany! Město si samo staví chatrče, když je splněné jídlo a spokojenost.</p>
+      <p><b>Cíl:</b> dotáhni civilizaci od kamenné éry k laserům 🔴 a vrtulníkům 🚁, pak proveď <b>Vzestup</b> ✨ a začni znovu — silnější.</p>`,
+      [{ label: 'Rozumím' }]);
+  };
+  m.appendChild(helpBtn);
+
   const danger = el('div', 'btns');
   const hr = el('button', 'warn', '🗑️ Smazat vše') as HTMLButtonElement;
   hr.onclick = () => {
@@ -389,7 +435,8 @@ function showSettings() {
 
 // ---------- top bar ----------
 const chipEls = new Map<string, { root: HTMLElement; amt: HTMLElement; rate: HTMLElement }>();
-let popChip: HTMLElement, hapChip: HTMLElement, energyChip: HTMLElement, buffWrap: HTMLElement;
+let popChip: HTMLElement, hapChip: HTMLElement, energyChip: HTMLElement, eraChip: HTMLElement, buffWrap: HTMLElement;
+const ERA_ICONS = ['🪨', '🥉', '🏛️', '🏰', '🏭', '🏙️', '🚀'];
 
 function buildTopbar() {
   topbar = el('div');
@@ -430,6 +477,8 @@ function updateTopbar() {
     energyChip.innerHTML = `⚡ <b>${fmt(g.energy.prod)}</b><span class="rate">/${fmt(g.energy.use)}</span>`;
     energyChip.classList.toggle('warn', g.energy.throttle < 1);
   } else energyChip.style.display = 'none';
+  eraChip.innerHTML = `${ERA_ICONS[g.maxEra]} <b>${ERA_NAMES[g.maxEra]}</b>`;
+  eraChip.title = 'Aktuální éra tvé civilizace';
   // buffy
   buffWrap.innerHTML = '';
   const now = Date.now();
@@ -464,15 +513,23 @@ export function initUI(game: Game, opts: { renderer: Renderer; onNewGame: () => 
   ui.innerHTML = '';
 
   buildTopbar();
-  popChip = el('span', 'chip'); hapChip = el('span', 'chip'); energyChip = el('span', 'chip');
+  popChip = el('span', 'chip'); hapChip = el('span', 'chip'); energyChip = el('span', 'chip'); eraChip = el('span', 'chip');
   energyChip.style.display = 'none';
-  topbar.appendChild(popChip); topbar.appendChild(hapChip); topbar.appendChild(energyChip);
+  topbar.appendChild(popChip); topbar.appendChild(hapChip); topbar.appendChild(energyChip); topbar.appendChild(eraChip);
   topbar.appendChild(buffWrap);
   topbar.appendChild(el('span', 'spacer'));
   const home = el('button', 'iconbtn', '🏠') as HTMLButtonElement;
   home.title = 'Na náves';
   home.onclick = () => { renderer.cam.x = 0; renderer.cam.y = 0; };
   topbar.appendChild(home);
+  const mute = el('button', 'iconbtn', g.s.settings.muted ? '🔇' : '🔊') as HTMLButtonElement;
+  mute.title = 'Ztlumit / zapnout zvuk';
+  mute.onclick = () => {
+    g.s.settings.muted = !g.s.settings.muted;
+    mute.textContent = g.s.settings.muted ? '🔇' : '🔊';
+    bus.emit('volumes');
+  };
+  topbar.appendChild(mute);
   const gear = el('button', 'iconbtn', '⚙️') as HTMLButtonElement;
   gear.onclick = () => showSettings();
   topbar.appendChild(gear);
@@ -517,6 +574,16 @@ export function initUI(game: Game, opts: { renderer: Renderer; onNewGame: () => 
   bus.on('built', (e: any) => { if (openedPanel === 'build') refreshPanel(); if (openedPanel === 'work') refreshPanel(); });
   bus.on('tech', () => { if (openedPanel === 'build' || openedPanel === 'upg') refreshPanel(); });
   bus.on('pop', () => { if (openedPanel === 'work') refreshPanel(); });
+  bus.on('demolished', (e: any) => {
+    const parts = Object.entries(e.refund as Rec).map(([r, v]) => `${RES_BY[r]?.icon || ''}${fmt(v as number)}`).join(' ');
+    toast(`🗑️ ${esc(B[e.t]?.name || e.t)} zbořeno. Vráceno: ${parts || 'nic'}`);
+    if (openedPanel === 'build' || openedPanel === 'work') refreshPanel();
+  });
+  bus.on('adj', (e: any) => toast(`🧭 Bonus sousedství: <b>+${Math.round((e.mult - 1) * 100)} %</b> (${esc(e.label)})`, 'gold'));
+  bus.on('storageFull', (e: any) => {
+    const d = RES_BY[e.res];
+    toast(`📦 Sklad suroviny ${d?.icon || ''} <b>${esc(d?.name || e.res)}</b> je plný — produkce se plýtvá. Postav skladiště nebo kup Rozšíření skladů.`);
+  });
 }
 
 let uiTimer = 0, hintTimer = 0;

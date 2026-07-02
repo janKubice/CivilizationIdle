@@ -403,6 +403,26 @@ export class Renderer {
       x.textAlign = 'center';
       x.fillText('!', sx, sy - 16 * z);
       if (g.s.settings.particles && Math.random() < 0.3) this.burst(wx, wy - 8, '#ffd74a', 1);
+
+      // šipka na okraji obrazovky, když je zlatý občan mimo záběr
+      if (sx < -10 || sx > this.W + 10 || sy < -10 || sy > this.H + 10) {
+        const cx = this.W / 2, cy = this.H / 2;
+        const dx = sx - cx, dy = sy - cy;
+        const scale = Math.min((this.W / 2 - 42) / Math.abs(dx || 1), (this.H / 2 - 42) / Math.abs(dy || 1));
+        const ex = cx + dx * scale, ey = cy + dy * scale;
+        const pulse = 1 + 0.12 * Math.sin(now / 130);
+        x.fillStyle = '#ffd74acc';
+        x.beginPath(); x.arc(ex, ey, 17 * pulse, 0, 7); x.fill();
+        x.font = '17px sans-serif';
+        x.fillText('🌟', ex, ey + 6);
+        const ang = Math.atan2(dy, dx);
+        x.fillStyle = '#ffd74a';
+        x.beginPath();
+        x.moveTo(ex + Math.cos(ang) * 26, ey + Math.sin(ang) * 26);
+        x.lineTo(ex + Math.cos(ang + 2.6) * 16, ey + Math.sin(ang + 2.6) * 16);
+        x.lineTo(ex + Math.cos(ang - 2.6) * 16, ey + Math.sin(ang - 2.6) * 16);
+        x.closePath(); x.fill();
+      }
     }
 
     // --- vrtulníky ---

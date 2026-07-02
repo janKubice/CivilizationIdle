@@ -156,6 +156,7 @@ export const UPGRADES: UDef[] = [
   { id: 'foreman', name: 'Předák', icon: '👷', desc: 'Automaticky přiřazuje volné obyvatele do práce.', max: 1, base: { gold: 1500 }, growth: 1, fx: { special: 'autoAssign' } },
   { id: 'goldRush', name: 'Zlatá horečka', icon: '🌟', desc: 'Zlatí občané chodí 2× častěji.', max: 1, base: { gold: 2000 }, growth: 1, fx: { goldenFreq: 2 } },
   { id: 'kineticClick', name: 'Kinetický klik', icon: '⚡', desc: 'Každý klik navíc přidá 2 % produkce dané suroviny za sekundu.', max: 1, base: { gold: 5000 }, growth: 1, reqTech: 'industrialization', fx: { kinetic: 0.02 } },
+  { id: 'academy', name: 'Akademie', icon: '🎓', desc: 'Knihovny ×1,5 za úroveň.', max: 5, base: { gold: 800, plank: 200 }, growth: 4, reqTech: 'education', fx: { job: { library: 1.5 } } },
 ];
 export const UPG_BY: Record<string, UDef> = Object.fromEntries(UPGRADES.map(u => [u.id, u]));
 
@@ -187,6 +188,8 @@ export const ACHS: AchDef[] = [
   { id: 'monumental', name: 'Monumentální', desc: 'Postav monument.', icon: '🗿', cond: g => (g.bCount.monument || 0) >= 1 },
   { id: 'golden5', name: 'Lovec štěstí', desc: 'Chyť 5 zlatých občanů.', icon: '🌟', cond: g => (g.s.stats.goldenClicked || 0) >= 5 },
   { id: 'ascend1', name: 'Vzestup', desc: 'Proveď první Vzestup.', icon: '✨', cond: g => (g.s.stats.ascensions || 0) >= 1 },
+  { id: 'laserAge', name: 'Světelná éra', desc: 'Vyzkoumej laserové těžební pušky.', icon: '🔴', cond: g => g.s.techs.includes('laserMining') },
+  { id: 'heliAge', name: 'Vzdušný most', desc: 'Vyzkoumej vrtulníky.', icon: '🚁', cond: g => g.s.techs.includes('rotorcraft') },
 ];
 
 // ---------- Ascension perky ----------
@@ -212,6 +215,19 @@ export const NODE_DEFS: NodeDef[] = [
   { res: 'coal', max: 300, renew: 0, name: 'Uhelná sloj' },
 ];
 export const N_TREE = 0, N_BERRY = 1, N_ROCK = 2, N_COPPER = 3, N_IRON = 4, N_COAL = 5;
+
+// ---------- Adjacency synergie (bonus za umístění budovy u zdrojů) ----------
+export interface AdjRule { kinds?: number[]; water?: boolean; per: number; cap: number; label: string }
+export const ADJ_RULES: Record<string, AdjRule> = {
+  forestCamp: { kinds: [0], per: 0.05, cap: 1.5, label: 'stromy v okolí' },
+  sawmill: { kinds: [0], per: 0.06, cap: 1.5, label: 'stromy v okolí' },
+  gatherHut: { kinds: [1], per: 0.08, cap: 1.4, label: 'keře v okolí' },
+  quarry: { kinds: [2], per: 0.08, cap: 1.5, label: 'balvany v okolí' },
+  farm: { water: true, per: 0.08, cap: 1.4, label: 'voda v okolí' },
+  copperMine: { kinds: [3], per: 0.25, cap: 2, label: 'měděné žíly v okolí' },
+  ironMine: { kinds: [4], per: 0.25, cap: 2, label: 'železné žíly v okolí' },
+  coalMine: { kinds: [5], per: 0.25, cap: 2, label: 'uhelné sloje v okolí' },
+};
 
 /** ručně umístěné uzly kolem startu, ať má hráč vždy co klikat */
 export const FORCED_NODES: [number, number, number][] = [

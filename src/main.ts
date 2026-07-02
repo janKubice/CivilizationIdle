@@ -9,7 +9,7 @@ import {
   collectGolden, computeOffline, freshRun,
 } from './sim';
 import { Renderer } from './render';
-import { initUI, uiFrame, showTitle, showOffline, openPanel, toast } from './ui';
+import { initUI, uiFrame, showTitle, showOffline, openPanel, toast, showBuildingInfo } from './ui';
 import { initAudio } from './audio';
 import { loadState, saveGame, hasSave } from './save';
 
@@ -42,8 +42,9 @@ initUI(g, {
   },
 });
 
-// debug / testy
+// debug / testy (a konzolové experimenty — je to singleplayer, cheaty jsou věc hráče)
 (window as any).G = g;
+import('./sim').then(sim => { (window as any).SIM = sim; });
 
 // ---------- title ----------
 showTitle(!!saved, (fresh) => {
@@ -146,12 +147,21 @@ canvas.addEventListener('contextmenu', (e) => {
 });
 
 window.addEventListener('keydown', (e) => {
+  const tag = (document.activeElement as HTMLElement)?.tagName;
+  if (tag === 'TEXTAREA' || tag === 'INPUT') return;
   if (e.key === 'Escape') {
     if (g.runtime.buildSel) cancelBuild();
     else openPanel(null);
     return;
   }
-  keys.add(e.key.toLowerCase());
+  const k = e.key.toLowerCase();
+  if (g.runtime.started) {
+    if (k === 'b') { openPanel('build'); return; }
+    if (k === 'p') { openPanel('work'); return; }
+    if (k === 't') { openPanel('tech'); return; }
+    if (k === 'u') { openPanel('upg'); return; }
+  }
+  keys.add(k);
 });
 window.addEventListener('keyup', (e) => keys.delete(e.key.toLowerCase()));
 
@@ -178,10 +188,15 @@ function handleClick(sx: number, sy: number) {
 
   // těžba klikem
   const node = g.world.nodeAt(tx, ty);
-  if (node) {
+  if (node && node.stock > 0) {
     const r = gather(g, node);
     if (r) bus.emit('gather', { tx: node.tx, ty: node.ty, amt: r.amt, res: r.res, crit: r.crit });
+    return;
   }
+
+  // klik na budovu → informace / bourání
+  const bIdx = g.world.occ.get(`${tx},${ty}`);
+  if (bIdx !== undefined) showBuildingInfo(bIdx);
 }
 
 // ---------- smyčka ----------

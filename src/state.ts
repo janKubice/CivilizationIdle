@@ -8,12 +8,13 @@ export interface BuildingInst {
   t: string; x: number; y: number;
   auto?: 1;        // postaveno organickým růstem
   d?: number;      // vzdálenost k nejbližšímu skladu (cache)
+  adj?: number;    // adjacency multiplikátor (cache, počítá se při stavbě)
 }
 
 export interface Buff { kind: 'frenzy' | 'clickFrenzy' | 'festival'; mult: number; until: number; label: string; icon: string }
 
 export interface Settings {
-  sfx: number; music: number;
+  sfx: number; music: number; muted: boolean;
   particles: boolean; daynight: boolean;
 }
 
@@ -73,7 +74,7 @@ export interface Game {
 }
 
 export function defaultSettings(): Settings {
-  return { sfx: 0.7, music: 0.4, particles: true, daynight: true };
+  return { sfx: 0.7, music: 0.4, muted: false, particles: true, daynight: true };
 }
 
 export function newState(seed: number, carry?: { legacy: GameState['legacy']; achs: string[]; settings: Settings; stats: GameState['stats'] }): GameState {
@@ -125,6 +126,11 @@ export function baseMults(): Mults {
 }
 
 const SIZES: Record<string, number> = Object.fromEntries(BUILDINGS.map(b => [b.id, b.size]));
+
+/** přestaví occupancy mapu po odstranění budovy */
+export function rebuildOccupancy(g: Game) {
+  g.world.rebuildOcc(g.s.buildings, SIZES);
+}
 
 /** naváže stav na Game objekt (zachovává identitu g) */
 export function initGame(g: Game, s: GameState) {
