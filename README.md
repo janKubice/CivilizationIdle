@@ -49,6 +49,7 @@ Dokumenty jdou od „co stavíme a proč" přes „jak to hráč hraje" až po �
 | 15 | [Katalog obsahu](docs/15-content-catalog.md) | Datové tabulky: suroviny, budovy, techy, upgrady, achievementy |
 | 16 | [Datové schémata](docs/16-data-schemas.md) | TS/JSON schémata pro data-driven obsah |
 | 17 | [Glosář](docs/17-glossary.md) | Definice pojmů použitých napříč dokumentací |
+| 18 | [Design expanze v0.2+](docs/18-v02-design-expansion.md) | Reakce na playtest: opravy, merge budov, čtvrtě, období, divy, vesmír — plán fází v0.2–v0.6 |
 
 ---
 
