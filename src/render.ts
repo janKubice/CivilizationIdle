@@ -354,6 +354,21 @@ export class Renderer {
     this.agentSync -= dt;
     if (this.agentSync <= 0 || g.runtime.agentsDirty) {
       this.syncAgents(g); this.agentSync = 4; g.runtime.agentsDirty = false;
+      // pulzy produkce nad budovami — živoucí ekonomika
+      if (this.cam.z > 0.7) {
+        let shown = 0;
+        for (const b of g.s.buildings) {
+          if (shown >= 5) break;
+          const def = B[b.t];
+          if (!def.jobs || !activeWorkers(g, b.t)) continue;
+          const wx = b.x * TILE, wy = b.y * TILE;
+          if (wx < vx0 || wx > vx1 || wy < vy0 || wy > vy1 || Math.random() < 0.6) continue;
+          const out = def.prod?.res ?? (def.recipe ? Object.keys(def.recipe.outputs)[0] : null);
+          if (!out) continue;
+          this.float(wx + def.size * TILE / 2, wy - 20, RES_BY[out]?.icon || '+', RES_BY[out]?.color || '#fff');
+          shown++;
+        }
+      }
     }
     this.updateAgents(g, dt);
     const laser = hasTech(g.s, 'laserMining');

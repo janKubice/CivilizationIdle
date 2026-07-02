@@ -586,13 +586,12 @@ export function initUI(game: Game, opts: { renderer: Renderer; onNewGame: () => 
   });
 }
 
-let uiTimer = 0, hintTimer = 0;
+let uiTimer = 0, hintTimer = 0, slowPanelTimer = 0;
 export function uiFrame(dt: number) {
   uiTimer -= dt;
   if (uiTimer <= 0) {
     uiTimer = 0.25;
     updateTopbar();
-    // dostupnost tlačítek v otevřeném panelu (lehké — jen disabled stavy přes rerender 1×/s)
   }
   hintTimer -= dt;
   if (hintTimer <= 0) {
@@ -600,7 +599,13 @@ export function uiFrame(dt: number) {
     const h = computeHint();
     hintEl.classList.toggle('off', !h);
     if (h && hintEl.innerHTML !== h) hintEl.innerHTML = h;
-    // panely s měnícími se čísly
+    // panely s měnícími se čísly (věda přibývá průběžně)
     if (openedPanel === 'tech' || openedPanel === 'asc') refreshPanel();
+  }
+  // dostupnost nákupů se mění s produkcí — obnov i stavby/vylepšení (šetrněji, 1×/2 s)
+  slowPanelTimer -= dt;
+  if (slowPanelTimer <= 0) {
+    slowPanelTimer = 2;
+    if (openedPanel === 'build' || openedPanel === 'upg') refreshPanel();
   }
 }

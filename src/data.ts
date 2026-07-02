@@ -55,7 +55,7 @@ export const BUILDINGS: BDef[] = [
   { id: 'forestCamp', name: 'Dřevorubecký tábor', icon: '🪓', desc: 'Dřevorubci automaticky těží dřevo.', era: 0, cost: { wood: 20 }, size: 1, jobs: 2, jobName: 'Dřevorubci', prod: { res: 'wood', rate: 0.5 }, raw: true },
   { id: 'gatherHut', name: 'Sběračská chýše', icon: '🧺', desc: 'Sběrači shánějí jídlo v okolí.', era: 0, cost: { wood: 15 }, size: 1, jobs: 2, jobName: 'Sběrači', prod: { res: 'food', rate: 0.45 }, raw: true },
   { id: 'quarry', name: 'Lom', icon: '⛏️', desc: 'Kameníci lámou kámen.', era: 0, cost: { wood: 30 }, size: 1, jobs: 2, jobName: 'Kameníci', prod: { res: 'stone', rate: 0.3 }, raw: true },
-  { id: 'library', name: 'Knihovna', icon: '📚', desc: 'Učenci generují vědu pro výzkum technologií.', era: 0, cost: { wood: 35 }, size: 1, jobs: 2, jobName: 'Učenci', prod: { res: 'research', rate: 0.22 }, noHaul: true },
+  { id: 'library', name: 'Knihovna', icon: '📚', desc: 'Učenci generují vědu pro výzkum technologií.', era: 0, cost: { wood: 30 }, size: 1, jobs: 2, jobName: 'Učenci', prod: { res: 'research', rate: 0.25 }, noHaul: true },
   { id: 'well', name: 'Studna', icon: '⛲', desc: 'Voda pro 40 obyvatel. Zvyšuje spokojenost.', era: 1, cost: { stone: 20 }, size: 1, water: 40, hap: 0.02 },
   { id: 'sawmill', name: 'Pila', icon: '🪚', desc: 'Řeže dřevo na prkna (2 dřevo → 1 prkno).', era: 1, cost: { wood: 50, stone: 15 }, size: 1, jobs: 2, jobName: 'Pilaři', recipe: { inputs: { wood: 1 }, outputs: { plank: 0.5 } }, tech: 'woodworking' },
   { id: 'farm', name: 'Farma', icon: '🌾', desc: 'Stabilní a vydatný zdroj jídla.', era: 1, cost: { wood: 35, plank: 10 }, size: 1, jobs: 3, jobName: 'Farmáři', prod: { res: 'food', rate: 1.1 }, raw: true, tech: 'agriculture' },
@@ -92,7 +92,7 @@ export interface TDef { id: string; name: string; desc: string; era: number; cos
 
 export const TECHS: TDef[] = [
   // éra 0 – doba kamenná
-  { id: 'stoneTools', name: 'Kamenné nástroje', desc: '+25 % těžby, +50 % kliku. Nástroje dostávají smysl.', era: 0, cost: 15, req: [], fx: { gather: 1.25, click: 1.5, toolPower: 0.25 } },
+  { id: 'stoneTools', name: 'Kamenné nástroje', desc: '+25 % těžby, +50 % kliku. Nástroje dostávají smysl.', era: 0, cost: 10, req: [], fx: { gather: 1.25, click: 1.5, toolPower: 0.25 } },
   { id: 'basketry', name: 'Košíkářství', desc: 'Lepší nošení surovin (+dosah dopravy).', era: 0, cost: 25, req: [], fx: { haul: 6 } },
   { id: 'hunting', name: 'Lov a sběr', desc: 'Sběrači jsou o 50 % efektivnější.', era: 0, cost: 20, req: [], fx: { job: { gatherHut: 1.5 } } },
   // éra 1 – bronzová
