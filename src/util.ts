@@ -39,20 +39,22 @@ export function fbm(seed: number, x: number, y: number, oct = 3): number {
 export const clamp = (v: number, a: number, b: number) => Math.max(a, Math.min(b, v));
 export const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 
-/** formát čísel: 1234 -> 1,2K atd. */
+/** formát čísel: 1234 -> 1,2K atd. (oddělovač dle jazyka — nastavuje i18n) */
 const SUF = ['K', 'M', 'B', 'T', 'Qa', 'Qi', 'Sx', 'Sp', 'Oc', 'No'];
+let DEC_SEP = ',';
+export function setDecimalSep(s: string) { DEC_SEP = s; }
 export function fmt(n: number, dec = 1): string {
   if (!isFinite(n)) return '∞';
   const neg = n < 0 ? '-' : '';
   n = Math.abs(n);
   if (n < 1000) {
     if (n === 0) return '0';
-    if (n < 10 && n % 1 > 0.05) return neg + n.toFixed(1).replace('.', ',');
+    if (n < 10 && n % 1 > 0.05) return neg + n.toFixed(1).replace('.', DEC_SEP);
     return neg + Math.floor(n).toString();
   }
   let i = -1;
   while (n >= 1000 && i < SUF.length - 1) { n /= 1000; i++; }
-  return neg + (n < 100 ? n.toFixed(dec) : Math.round(n).toString()).replace('.', ',') + SUF[i];
+  return neg + (n < 100 ? n.toFixed(dec) : Math.round(n).toString()).replace('.', DEC_SEP) + SUF[i];
 }
 
 export function fmtRate(n: number): string {

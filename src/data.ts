@@ -32,8 +32,11 @@ export const RES: ResDef[] = [
 export const RES_BY: Record<string, ResDef> = Object.fromEntries(RES.map(r => [r.id, r]));
 
 // ---------- Budovy ----------
+export type BCat = 'city' | 'food' | 'mine' | 'ind' | 'other';
+
 export interface BDef {
   id: string; name: string; icon: string; desc: string; era: number;
+  cat: BCat;
   cost: Rec; size: number;
   jobs?: number; jobName?: string;
   prod?: { res: string; rate: number };   // /pracovník/s
@@ -49,32 +52,32 @@ export interface BDef {
 }
 
 export const BUILDINGS: BDef[] = [
-  { id: 'plaza', name: 'Náves', icon: '🏕️', desc: 'Srdce tvé civilizace.', era: 0, cost: {}, size: 2, housing: 5, water: 15, unbuildable: true },
-  { id: 'hut', name: 'Chatrč', icon: '🛖', desc: 'Bydlení pro 4 obyvatele. Město si je staví i samo.', era: 0, cost: { wood: 15, stone: 5 }, size: 1, housing: 4 },
-  { id: 'storehouse', name: 'Skladiště', icon: '📦', desc: '+75 % kapacity všech surovin. Zkracuje donášku okolním budovám.', era: 0, cost: { wood: 40, stone: 15 }, size: 1, capBoost: true },
-  { id: 'forestCamp', name: 'Dřevorubecký tábor', icon: '🪓', desc: 'Dřevorubci automaticky těží dřevo.', era: 0, cost: { wood: 20 }, size: 1, jobs: 2, jobName: 'Dřevorubci', prod: { res: 'wood', rate: 0.5 }, raw: true },
-  { id: 'gatherHut', name: 'Sběračská chýše', icon: '🧺', desc: 'Sběrači shánějí jídlo v okolí.', era: 0, cost: { wood: 15 }, size: 1, jobs: 2, jobName: 'Sběrači', prod: { res: 'food', rate: 0.45 }, raw: true },
-  { id: 'quarry', name: 'Lom', icon: '⛏️', desc: 'Kameníci lámou kámen.', era: 0, cost: { wood: 30 }, size: 1, jobs: 2, jobName: 'Kameníci', prod: { res: 'stone', rate: 0.3 }, raw: true },
-  { id: 'library', name: 'Knihovna', icon: '📚', desc: 'Učenci generují vědu pro výzkum technologií.', era: 0, cost: { wood: 30 }, size: 1, jobs: 2, jobName: 'Učenci', prod: { res: 'research', rate: 0.25 }, noHaul: true },
-  { id: 'well', name: 'Studna', icon: '⛲', desc: 'Voda pro 40 obyvatel. Zvyšuje spokojenost.', era: 1, cost: { stone: 20 }, size: 1, water: 40, hap: 0.02 },
-  { id: 'sawmill', name: 'Pila', icon: '🪚', desc: 'Řeže dřevo na prkna (2 dřevo → 1 prkno).', era: 1, cost: { wood: 50, stone: 15 }, size: 1, jobs: 2, jobName: 'Pilaři', recipe: { inputs: { wood: 1 }, outputs: { plank: 0.5 } }, tech: 'woodworking' },
-  { id: 'farm', name: 'Farma', icon: '🌾', desc: 'Stabilní a vydatný zdroj jídla.', era: 1, cost: { wood: 35, plank: 10 }, size: 1, jobs: 3, jobName: 'Farmáři', prod: { res: 'food', rate: 1.1 }, raw: true, tech: 'agriculture' },
-  { id: 'copperMine', name: 'Měděný důl', icon: '⚒️', desc: 'Horníci těží měděnou rudu.', era: 1, cost: { wood: 40, plank: 10 }, size: 1, jobs: 2, jobName: 'Horníci (Cu)', prod: { res: 'copperOre', rate: 0.25 }, raw: true, tech: 'copperSmelting' },
-  { id: 'smelter', name: 'Huť', icon: '🔥', desc: 'Taví měděnou rudu na měď.', era: 1, cost: { stone: 40, wood: 20 }, size: 1, jobs: 2, jobName: 'Slévači', recipe: { inputs: { copperOre: 0.5 }, outputs: { copper: 0.25 } }, tech: 'copperSmelting' },
-  { id: 'workshop', name: 'Dílna', icon: '🛠️', desc: 'Vyrábí nástroje (prkna + měď). Nástroje zrychlují těžbu!', era: 1, cost: { plank: 30, copper: 10 }, size: 1, jobs: 2, jobName: 'Řemeslníci', recipe: { inputs: { plank: 0.3, copper: 0.12 }, outputs: { tools: 0.1 } }, tech: 'toolmaking' },
-  { id: 'market', name: 'Tržiště', icon: '🏪', desc: 'Obchodníci vydělávají zlato. Zvyšuje spokojenost.', era: 1, cost: { wood: 30, plank: 20 }, size: 1, jobs: 2, jobName: 'Obchodníci', prod: { res: 'gold', rate: 0.25 }, noHaul: true, hap: 0.05, tech: 'marketplace' },
-  { id: 'ironMine', name: 'Železný důl', icon: '⚒️', desc: 'Horníci těží železnou rudu.', era: 2, cost: { plank: 25, copper: 10 }, size: 1, jobs: 2, jobName: 'Horníci (Fe)', prod: { res: 'ironOre', rate: 0.22 }, raw: true, tech: 'ironWorking' },
-  { id: 'ironworks', name: 'Železárna', icon: '🔩', desc: 'Taví železnou rudu (ruda + dřevo → železo).', era: 2, cost: { stone: 60, plank: 20 }, size: 1, jobs: 2, jobName: 'Hutníci', recipe: { inputs: { ironOre: 0.4, wood: 0.5 }, outputs: { iron: 0.2 } }, tech: 'ironWorking' },
-  { id: 'brickworks', name: 'Cihelna', icon: '🧱', desc: 'Pálí cihly z kamene.', era: 2, cost: { stone: 40, wood: 20 }, size: 1, jobs: 2, jobName: 'Cihláři', recipe: { inputs: { stone: 0.6 }, outputs: { brick: 0.3 } }, tech: 'masonry' },
-  { id: 'house', name: 'Dům', icon: '🏠', desc: 'Zděné bydlení pro 9 obyvatel.', era: 2, cost: { wood: 40, brick: 20 }, size: 1, housing: 9, tech: 'masonry' },
-  { id: 'temple', name: 'Chrám', icon: '🏛️', desc: 'Výrazně zvyšuje spokojenost. Umožňuje festivaly.', era: 2, cost: { brick: 60, stone: 80 }, size: 1, hap: 0.1, tech: 'theology' },
-  { id: 'coalMine', name: 'Uhelný důl', icon: '⬛', desc: 'Horníci těží uhlí — palivo průmyslu.', era: 4, cost: { plank: 30, iron: 10 }, size: 1, jobs: 2, jobName: 'Horníci (uhlí)', prod: { res: 'coal', rate: 0.3 }, raw: true, tech: 'coalMining' },
-  { id: 'steelworks', name: 'Ocelárna', icon: '🏗️', desc: 'Železo + uhlí → ocel.', era: 4, cost: { brick: 80, iron: 40 }, size: 1, jobs: 2, jobName: 'Oceláři', recipe: { inputs: { iron: 0.3, coal: 0.4 }, outputs: { steel: 0.15 } }, tech: 'steel' },
-  { id: 'powerPlant', name: 'Elektrárna', icon: '⚡', desc: 'Spaluje uhlí a vyrábí energii pro továrny.', era: 4, cost: { brick: 60, steel: 20 }, size: 1, jobs: 2, jobName: 'Operátoři', energyOut: 3, fuel: { res: 'coal', rate: 0.4 }, tech: 'electricity' },
-  { id: 'factory', name: 'Továrna', icon: '🏭', desc: 'Vyrábí stroje z oceli. Potřebuje energii.', era: 4, cost: { brick: 100, steel: 60 }, size: 2, jobs: 3, jobName: 'Dělníci', recipe: { inputs: { steel: 0.15 }, outputs: { machinery: 0.04 } }, energyUse: 2, tech: 'industrialization' },
-  { id: 'trainStation', name: 'Nádraží', icon: '🚉', desc: 'Železnice — masivně zlepšuje dopravu surovin.', era: 4, cost: { steel: 80, brick: 80 }, size: 2, tech: 'railways' },
-  { id: 'hitechLab', name: 'Hi-tech laboratoř', icon: '🔬', desc: 'Vyrábí elektroniku a produkuje spoustu vědy.', era: 5, cost: { steel: 60, machinery: 25 }, size: 1, jobs: 2, jobName: 'Vědci', recipe: { inputs: { machinery: 0.04 }, outputs: { electronics: 0.015, research: 1.4 } }, energyUse: 3, tech: 'electronicsTech' },
-  { id: 'monument', name: 'Monument', icon: '🗿', desc: 'Velkolepý pomník tvé civilizace. Spokojenost a sláva (skóre).', era: 3, cost: { stone: 600, brick: 250, gold: 800 }, size: 2, hap: 0.12, tech: 'monuments' },
+  { id: 'plaza', name: 'Náves', icon: '🏕️', desc: 'Srdce tvé civilizace.', era: 0, cat: 'city', cost: {}, size: 2, housing: 5, water: 15, unbuildable: true },
+  { id: 'hut', name: 'Chatrč', icon: '🛖', desc: 'Bydlení pro 4 obyvatele. Město si je staví i samo.', era: 0, cat: 'city', cost: { wood: 15, stone: 5 }, size: 1, housing: 4 },
+  { id: 'storehouse', name: 'Skladiště', icon: '📦', desc: '+75 % kapacity všech surovin. Zkracuje donášku okolním budovám.', era: 0, cat: 'city', cost: { wood: 40, stone: 15 }, size: 1, capBoost: true },
+  { id: 'forestCamp', name: 'Dřevorubecký tábor', icon: '🪓', desc: 'Dřevorubci automaticky těží dřevo.', era: 0, cat: 'mine', cost: { wood: 20 }, size: 1, jobs: 2, jobName: 'Dřevorubci', prod: { res: 'wood', rate: 0.5 }, raw: true },
+  { id: 'gatherHut', name: 'Sběračská chýše', icon: '🧺', desc: 'Sběrači shánějí jídlo v okolí.', era: 0, cat: 'food', cost: { wood: 15 }, size: 1, jobs: 2, jobName: 'Sběrači', prod: { res: 'food', rate: 0.45 }, raw: true },
+  { id: 'quarry', name: 'Lom', icon: '⛏️', desc: 'Kameníci lámou kámen.', era: 0, cat: 'mine', cost: { wood: 30 }, size: 1, jobs: 2, jobName: 'Kameníci', prod: { res: 'stone', rate: 0.3 }, raw: true },
+  { id: 'library', name: 'Knihovna', icon: '📚', desc: 'Učenci generují vědu pro výzkum technologií.', era: 0, cat: 'other', cost: { wood: 30 }, size: 1, jobs: 2, jobName: 'Učenci', prod: { res: 'research', rate: 0.25 }, noHaul: true },
+  { id: 'well', name: 'Studna', icon: '⛲', desc: 'Voda pro 40 obyvatel. Zvyšuje spokojenost.', era: 1, cat: 'city', cost: { stone: 20 }, size: 1, water: 40, hap: 0.02 },
+  { id: 'sawmill', name: 'Pila', icon: '🪚', desc: 'Řeže dřevo na prkna (2 dřevo → 1 prkno).', era: 1, cat: 'ind', cost: { wood: 50, stone: 15 }, size: 1, jobs: 2, jobName: 'Pilaři', recipe: { inputs: { wood: 1 }, outputs: { plank: 0.5 } }, tech: 'woodworking' },
+  { id: 'farm', name: 'Farma', icon: '🌾', desc: 'Stabilní a vydatný zdroj jídla.', era: 1, cat: 'food', cost: { wood: 35, plank: 10 }, size: 1, jobs: 3, jobName: 'Farmáři', prod: { res: 'food', rate: 1.1 }, raw: true, tech: 'agriculture' },
+  { id: 'copperMine', name: 'Měděný důl', icon: '⚒️', desc: 'Horníci těží měděnou rudu.', era: 1, cat: 'mine', cost: { wood: 40, plank: 10 }, size: 1, jobs: 2, jobName: 'Horníci (Cu)', prod: { res: 'copperOre', rate: 0.25 }, raw: true, tech: 'copperSmelting' },
+  { id: 'smelter', name: 'Huť', icon: '🔥', desc: 'Taví měděnou rudu na měď.', era: 1, cat: 'ind', cost: { stone: 40, wood: 20 }, size: 1, jobs: 2, jobName: 'Slévači', recipe: { inputs: { copperOre: 0.5 }, outputs: { copper: 0.25 } }, tech: 'copperSmelting' },
+  { id: 'workshop', name: 'Dílna', icon: '🛠️', desc: 'Vyrábí nástroje (prkna + měď). Nástroje zrychlují těžbu!', era: 1, cat: 'ind', cost: { plank: 30, copper: 10 }, size: 1, jobs: 2, jobName: 'Řemeslníci', recipe: { inputs: { plank: 0.3, copper: 0.12 }, outputs: { tools: 0.1 } }, tech: 'toolmaking' },
+  { id: 'market', name: 'Tržiště', icon: '🏪', desc: 'Obchodníci vydělávají zlato. Zvyšuje spokojenost.', era: 1, cat: 'city', cost: { wood: 30, plank: 20 }, size: 1, jobs: 2, jobName: 'Obchodníci', prod: { res: 'gold', rate: 0.25 }, noHaul: true, hap: 0.05, tech: 'marketplace' },
+  { id: 'ironMine', name: 'Železný důl', icon: '⚒️', desc: 'Horníci těží železnou rudu.', era: 2, cat: 'mine', cost: { plank: 25, copper: 10 }, size: 1, jobs: 2, jobName: 'Horníci (Fe)', prod: { res: 'ironOre', rate: 0.22 }, raw: true, tech: 'ironWorking' },
+  { id: 'ironworks', name: 'Železárna', icon: '🔩', desc: 'Taví železnou rudu (ruda + dřevo → železo).', era: 2, cat: 'ind', cost: { stone: 60, plank: 20 }, size: 1, jobs: 2, jobName: 'Hutníci', recipe: { inputs: { ironOre: 0.4, wood: 0.5 }, outputs: { iron: 0.2 } }, tech: 'ironWorking' },
+  { id: 'brickworks', name: 'Cihelna', icon: '🧱', desc: 'Pálí cihly z kamene.', era: 2, cat: 'ind', cost: { stone: 40, wood: 20 }, size: 1, jobs: 2, jobName: 'Cihláři', recipe: { inputs: { stone: 0.6 }, outputs: { brick: 0.3 } }, tech: 'masonry' },
+  { id: 'house', name: 'Dům', icon: '🏠', desc: 'Zděné bydlení pro 9 obyvatel.', era: 2, cat: 'city', cost: { wood: 40, brick: 20 }, size: 1, housing: 9, tech: 'masonry' },
+  { id: 'temple', name: 'Chrám', icon: '🏛️', desc: 'Výrazně zvyšuje spokojenost. Umožňuje festivaly.', era: 2, cat: 'city', cost: { brick: 60, stone: 80 }, size: 1, hap: 0.1, tech: 'theology' },
+  { id: 'coalMine', name: 'Uhelný důl', icon: '⬛', desc: 'Horníci těží uhlí — palivo průmyslu.', era: 4, cat: 'mine', cost: { plank: 30, iron: 10 }, size: 1, jobs: 2, jobName: 'Horníci (uhlí)', prod: { res: 'coal', rate: 0.3 }, raw: true, tech: 'coalMining' },
+  { id: 'steelworks', name: 'Ocelárna', icon: '🏗️', desc: 'Železo + uhlí → ocel.', era: 4, cat: 'ind', cost: { brick: 80, iron: 40 }, size: 1, jobs: 2, jobName: 'Oceláři', recipe: { inputs: { iron: 0.3, coal: 0.4 }, outputs: { steel: 0.15 } }, tech: 'steel' },
+  { id: 'powerPlant', name: 'Elektrárna', icon: '⚡', desc: 'Spaluje uhlí a vyrábí energii pro továrny.', era: 4, cat: 'ind', cost: { brick: 60, steel: 20 }, size: 1, jobs: 2, jobName: 'Operátoři', energyOut: 3, fuel: { res: 'coal', rate: 0.4 }, tech: 'electricity' },
+  { id: 'factory', name: 'Továrna', icon: '🏭', desc: 'Vyrábí stroje z oceli. Potřebuje energii.', era: 4, cat: 'ind', cost: { brick: 100, steel: 60 }, size: 2, jobs: 3, jobName: 'Dělníci', recipe: { inputs: { steel: 0.15 }, outputs: { machinery: 0.04 } }, energyUse: 2, tech: 'industrialization' },
+  { id: 'trainStation', name: 'Nádraží', icon: '🚉', desc: 'Železnice — masivně zlepšuje dopravu surovin.', era: 4, cat: 'other', cost: { steel: 80, brick: 80 }, size: 2, tech: 'railways' },
+  { id: 'hitechLab', name: 'Hi-tech laboratoř', icon: '🔬', desc: 'Vyrábí elektroniku a produkuje spoustu vědy.', era: 5, cat: 'ind', cost: { steel: 60, machinery: 25 }, size: 1, jobs: 2, jobName: 'Vědci', recipe: { inputs: { machinery: 0.04 }, outputs: { electronics: 0.015, research: 1.4 } }, energyUse: 3, tech: 'electronicsTech' },
+  { id: 'monument', name: 'Monument', icon: '🗿', desc: 'Velkolepý pomník tvé civilizace. Spokojenost a sláva (skóre).', era: 3, cat: 'city', cost: { stone: 600, brick: 250, gold: 800 }, size: 2, hap: 0.12, tech: 'monuments' },
 ];
 export const B: Record<string, BDef> = Object.fromEntries(BUILDINGS.map(b => [b.id, b]));
 

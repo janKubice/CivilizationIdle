@@ -16,6 +16,7 @@ export interface Buff { kind: 'frenzy' | 'clickFrenzy' | 'festival'; mult: numbe
 export interface Settings {
   sfx: number; music: number; muted: boolean;
   particles: boolean; daynight: boolean;
+  lang?: string;   // 'cs'|'en'|'de'|'fr'; chybí-li, detekce z prohlížeče
 }
 
 export interface GameState {
@@ -57,6 +58,7 @@ export interface Game {
   m: Mults;
   rates: Rec;                        // vyhlazené produkce/s pro UI
   happiness: number;
+  hapParts: { key: string; v: number }[];  // rozpad spokojenosti pro UI
   starving: boolean;
   frenzy: number; clickFrenzy: number;
   energy: { prod: number; use: number; throttle: number };
@@ -139,6 +141,7 @@ export function initGame(g: Game, s: GameState) {
   g.m = baseMults();
   g.rates = {};
   g.happiness = 0.6;
+  g.hapParts = [];
   g.starving = false;
   g.frenzy = 1; g.clickFrenzy = 1;
   g.energy = { prod: 0, use: 0, throttle: 1 };

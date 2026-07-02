@@ -14,9 +14,13 @@ body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; color: #e6
   font-size: 13px; z-index: 20;
 }
 .chip {
-  display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px; border-radius: 14px;
+  display: inline-flex; align-items: center; gap: 4px; padding: 3px 8px 5px; border-radius: 14px;
   background: #1d2736; border: 1px solid #2c3a50; white-space: nowrap; line-height: 1.2; cursor: default;
+  position: relative;
 }
+.cbar { position: absolute; left: 8px; right: 8px; bottom: 2px; height: 2px; background: #ffffff14; border-radius: 2px; overflow: hidden; }
+.cbar i { display: block; height: 100%; width: 0; background: #4a6da8; }
+.rate.pos { color: #7ee787; } .rate.neg { color: #ff7b72; }
 .chip .rate { font-size: 11px; opacity: .85; }
 .chip .rate.pos { color: #7ee787; } .chip .rate.neg { color: #ff7b72; }
 .chip.warn { border-color: #d29922; }
@@ -74,6 +78,26 @@ body { font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; color: #e6
 .era-h { font-size: 13px; font-weight: 700; color: #d29922; margin: 12px 0 6px; border-bottom: 1px solid #2c3a50; padding-bottom: 3px; }
 .era-h:first-child { margin-top: 0; }
 .badge { font-size: 10.5px; background: #2c3a50; border-radius: 8px; padding: 1px 7px; margin-left: 5px; }
+
+/* build tabs */
+.tabs { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 8px; }
+.tab { background: #1d2736; border: 1px solid #2c3a50; color: #cfd6e2; border-radius: 8px; padding: 4px 10px; font-size: 12px; cursor: pointer; }
+.tab.active { background: #2b4066; border-color: #4a6da8; color: #fff; }
+
+/* storage rows */
+.srow { display: grid; grid-template-columns: 26px 1fr auto; gap: 4px 8px; align-items: center; padding: 7px 6px 5px; border-bottom: 1px solid #222c3d; font-size: 13px; }
+.srow .nm small { display: block; opacity: .65; font-size: 11px; }
+.srow .cnt { text-align: right; font-variant-numeric: tabular-nums; }
+.srow .cnt .rate { display: block; font-size: 11px; }
+.srow .sbar { grid-column: 1 / -1; height: 3px; background: #0d1420; border-radius: 2px; overflow: hidden; }
+.srow .sbar i { display: block; height: 100%; }
+
+/* language buttons */
+.langbtn { font-size: 17px; padding: 5px 9px; background: #1a2433; border: 1px solid #2c3a50; border-radius: 8px; cursor: pointer; margin-left: 4px; }
+.langbtn.active { border-color: #d29922; background: #2a2413; }
+#title .langbar { position: absolute; top: 14px; right: 16px; display: flex; gap: 4px; }
+#title .langbtn { min-width: 0; padding: 6px 10px; font-size: 18px; margin: 0; }
+#title .tcontent { display: flex; flex-direction: column; align-items: center; }
 
 /* workforce rows */
 .trow { display: grid; grid-template-columns: 30px 1fr 88px; gap: 8px; align-items: center; padding: 7px 6px; border-bottom: 1px solid #222c3d; font-size: 13px; }

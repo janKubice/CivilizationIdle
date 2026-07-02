@@ -42,7 +42,8 @@ export class Renderer {
   private chunkCache = new Map<string, HTMLCanvasElement>();
   private particles: Particle[] = [];
   private floats: FloatText[] = [];
-  private agents: Agent[] = [];
+  /** perzistentní agenti s identitou — brání "teleportům" při re-syncu */
+  private agentMap = new Map<string, Agent>();
   private helis: Heli[] = [];
   private agentSync = 0;
   private mini: HTMLCanvasElement | null = null;
@@ -65,8 +66,9 @@ export class Renderer {
     bus.on('built', (e: any) => {
       const wx = e.x * TILE + TILE / 2, wy = e.y * TILE + TILE / 2;
       if (this.g.s.settings.particles) this.burst(wx, wy, '#d8c8a0', 10);
-      this.agents.length = 0; // re-sync
+      // agenti zůstávají — sync jen přidá nové (indexy budov se stavbou nemění)
     });
+    bus.on('demolished', () => { this.agentMap.clear(); }); // indexy budov se posunuly
     bus.on('festival', () => {
       for (let i = 0; i < 40; i++) this.burst(Math.random() * 200 - 100, Math.random() * 200 - 100, ['#d84848', '#ffd777', '#4a8040', '#8fb8ff'][i % 4], 2);
     });
@@ -76,7 +78,7 @@ export class Renderer {
 
   reset() {
     this.chunkCache.clear();
-    this.particles.length = 0; this.floats.length = 0; this.agents.length = 0; this.helis.length = 0;
+    this.particles.length = 0; this.floats.length = 0; this.agentMap.clear(); this.helis.length = 0;
     this.cam.x = 0; this.cam.y = 0; this.cam.z = 1;
   }
 
@@ -138,15 +140,13 @@ export class Renderer {
     return cc;
   }
 
-  // ---------- agenti (LOD: jen viditelní) ----------
+  // ---------- agenti (LOD: jen viditelní; perzistentní identita) ----------
   private syncAgents(g: Game) {
-    const view = this.viewBounds(1.3);
-    const want: Agent[] = [];
-    const laser = hasTech(g.s, 'laserMining');
+    const view = this.viewBounds(1.5);
+    const wanted = new Set<string>();
     let budget = MAX_AGENTS;
 
     // pracovníci u viditelných budov
-    const perType: Record<string, number> = {};
     for (let i = 0; i < g.s.buildings.length && budget > 0; i++) {
       const b = g.s.buildings[i];
       const def = B[b.t];
@@ -154,20 +154,23 @@ export class Renderer {
       const wx = b.x * TILE, wy = b.y * TILE;
       if (wx < view[0] || wx > view[2] || wy < view[1] || wy > view[3]) continue;
       const act = activeWorkers(g, b.t);
-      const tot = slots(g, b.t);
-      if (!act || !tot) continue;
-      const cnt = perType[b.t] = (perType[b.t] || 0);
+      if (!act) continue;
       const perB = Math.max(0, Math.min(2, Math.round(act / Math.max(1, g.bCount[b.t] || 1))));
-      for (let a = 0; a < perB && budget > 0; a++) {
-        want.push(this.makeAgent(g, i, a));
-        budget--;
+      for (let a = 0; a < perB && budget > 0; a++, budget--) {
+        const k = `w:${i}:${a}`;
+        wanted.add(k);
+        if (!this.agentMap.has(k)) this.agentMap.set(k, this.makeAgent(g, i, a));
       }
-      perType[b.t] = cnt + perB;
     }
     // zahaleči kolem návsi
     const idle = Math.min(8, g.s.pop - Object.values(g.s.assigned).reduce((a, v) => a + v, 0));
-    for (let i = 0; i < idle && budget > 0; i++, budget--) want.push(this.makeIdleAgent(g, i));
-    this.agents = want;
+    for (let i = 0; i < idle && budget > 0; i++, budget--) {
+      const k = `i:${i}`;
+      wanted.add(k);
+      if (!this.agentMap.has(k)) this.agentMap.set(k, this.makeIdleAgent(g, i));
+    }
+    // odeber už nechtěné (odpřiřazení, mimo dosah) — existující pokračují bez skoku
+    for (const k of this.agentMap.keys()) if (!wanted.has(k)) this.agentMap.delete(k);
 
     // vrtulníky
     if (hasTech(g.s, 'rotorcraft')) {
@@ -212,7 +215,7 @@ export class Renderer {
   }
 
   private updateAgents(g: Game, dt: number) {
-    for (const a of this.agents) {
+    for (const a of this.agentMap.values()) {
       if (a.state === 'work') {
         a.timer -= dt;
         if (a.timer <= 0) { a.state = 'walk'; a.seg = 0; a.t = 0; a.carry = a.bIdx >= 0 ? (B[g.s.buildings[a.bIdx]?.t]?.prod?.res ?? 'wood') : null; }
@@ -268,16 +271,28 @@ export class Renderer {
       }
     }
 
-    // --- cesty ---
+    // --- cesty (autotiling: užší jádro + spoje jen ke skutečným sousedům) ---
     const t0x = Math.floor(vx0 / TILE), t0y = Math.floor(vy0 / TILE);
     const t1x = Math.floor(vx1 / TILE), t1y = Math.floor(vy1 / TILE);
-    x.fillStyle = '#a5946e';
+    const visRoads: [number, number][] = [];
     for (const rk of g.world.roads) {
       const ci = rk.indexOf(',');
       const tx = +rk.slice(0, ci), ty = +rk.slice(ci + 1);
       if (tx < t0x || tx > t1x || ty < t0y || ty > t1y) continue;
-      const [sx, sy] = this.worldToScreen(tx * TILE, ty * TILE);
-      x.fillRect(sx, sy, TILE * z + 0.5, TILE * z + 0.5);
+      visRoads.push([tx, ty]);
+    }
+    const hasRoad = (tx: number, ty: number) => g.world.roads.has(key(tx, ty));
+    for (const pass of [{ inset: 5, col: '#8a7a58' }, { inset: 8, col: '#b0a077' }]) {
+      x.fillStyle = pass.col;
+      const ins = pass.inset * z, core = (TILE - 2 * pass.inset) * z;
+      for (const [tx, ty] of visRoads) {
+        const [sx, sy] = this.worldToScreen(tx * TILE, ty * TILE);
+        x.fillRect(sx + ins, sy + ins, core, core);
+        if (hasRoad(tx + 1, ty)) x.fillRect(sx + ins + core, sy + ins, ins * 2 + 0.5, core);
+        if (hasRoad(tx - 1, ty)) x.fillRect(sx - 0.25, sy + ins, ins, core);
+        if (hasRoad(tx, ty + 1)) x.fillRect(sx + ins, sy + ins + core, core, ins * 2 + 0.5);
+        if (hasRoad(tx, ty - 1)) x.fillRect(sx + ins, sy - 0.25, core, ins);
+      }
     }
 
     // --- uzly ---
@@ -372,7 +387,7 @@ export class Renderer {
     }
     this.updateAgents(g, dt);
     const laser = hasTech(g.s, 'laserMining');
-    for (const a of this.agents) {
+    for (const a of this.agentMap.values()) {
       const [sx, sy] = this.worldToScreen(a.x, a.y);
       if (sx < -20 || sx > this.W + 20 || sy < -20 || sy > this.H + 20) continue;
       const s = z;

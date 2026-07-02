@@ -12,6 +12,7 @@ import { Renderer } from './render';
 import { initUI, uiFrame, showTitle, showOffline, openPanel, toast, showBuildingInfo } from './ui';
 import { initAudio } from './audio';
 import { loadState, saveGame, hasSave } from './save';
+import { setLang, detectLang, t, Lang } from './i18n';
 
 const canvas = document.getElementById('game') as HTMLCanvasElement;
 
@@ -20,6 +21,9 @@ const g = {} as Game;
 const saved = loadState();
 initGame(g, saved ?? newState((Math.random() * 2 ** 31) | 0));
 recomputeMults(g);
+const lang0 = (g.s.settings.lang as Lang) || detectLang();
+g.s.settings.lang = lang0;
+setLang(lang0);
 
 const renderer = new Renderer(canvas, g);
 initAudio(g);
@@ -35,6 +39,7 @@ initUI(g, {
   onImport: (st) => {
     initGame(g, st);
     recomputeMults(g);
+    setLang((g.s.settings.lang as Lang) || detectLang());
     bus.emit('worldReset');
     openPanel(null);
     g.runtime.paused = false;
@@ -143,7 +148,7 @@ function zoomAt(sx: number, sy: number, newZ: number) {
 
 canvas.addEventListener('contextmenu', (e) => {
   e.preventDefault();
-  if (g.runtime.buildSel) { cancelBuild(); toast('Stavění zrušeno.'); }
+  if (g.runtime.buildSel) { cancelBuild(); toast(t('toast.buildCancel')); }
 });
 
 window.addEventListener('keydown', (e) => {
@@ -172,7 +177,7 @@ function handleClick(sx: number, sy: number) {
   // stavění
   if (g.runtime.buildSel) {
     const err = tryBuild(g, g.runtime.buildSel, tx, ty);
-    if (err) { toast('⚠️ ' + err); bus.emit('error'); }
+    if (err) { toast('⚠️ ' + t(err)); bus.emit('error'); }
     return;
   }
 

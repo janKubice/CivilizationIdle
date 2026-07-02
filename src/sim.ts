@@ -253,19 +253,24 @@ export function tick(g: Game, dt: number) {
 
 function computeHappiness(g: Game, festHap: number) {
   const s = g.s;
-  let h = 0.45;
-  h += (s.res.food || 0) > 1 ? 0.12 : (g.starving ? -0.3 : 0);
+  const parts: { key: string; v: number }[] = [{ key: 'hap.base', v: 0.45 }];
+  const foodPart = (s.res.food || 0) > 1 ? 0.12 : (g.starving ? -0.3 : 0);
+  parts.push({ key: g.starving ? 'hap.starving' : 'hap.food', v: foodPart });
   const water = waterCap(g);
-  h += 0.13 * Math.min(1, water / Math.max(1, s.pop));
+  parts.push({ key: 'hap.water', v: 0.13 * Math.min(1, water / Math.max(1, s.pop)) });
   const housing = housingCap(g);
   const crowd = housing > 0 ? s.pop / housing : 2;
-  if (crowd < 0.95) h += 0.05; else if (crowd >= 1) h -= 0.05;
+  parts.push({ key: 'hap.housing', v: crowd < 0.95 ? 0.05 : crowd >= 1 ? -0.05 : 0 });
+  let services = 0;
   for (const [t, n] of Object.entries(g.bCount)) {
     const def = B[t];
-    if (def?.hap) h += def.hap * Math.min(n, 3);
+    if (def?.hap) services += def.hap * Math.min(n, 3);
   }
-  h += g.m.hapBonus + festHap;
-  g.happiness = clamp(h, 0.05, 1);
+  parts.push({ key: 'hap.services', v: services });
+  parts.push({ key: 'hap.bonus', v: g.m.hapBonus });
+  if (festHap > 0) parts.push({ key: 'hap.festival', v: festHap });
+  g.hapParts = parts;
+  g.happiness = clamp(parts.reduce((a, p) => a + p.v, 0), 0.05, 1);
 }
 
 function clampAssignments(g: Game) {
@@ -424,6 +429,7 @@ function extendRoad(g: Game, rand: () => number) {
       const b = g.world.biomeAt(tx, ty);
       if (b === B_WATER || b === B_MOUNTAIN) break;
       if (g.world.occ.has(kk) || g.world.nodeAt(tx, ty)) break;
+      if (wouldFormRoadBlock(g, tx, ty)) break;
       g.world.roads.add(kk);
       placed++;
     }
@@ -461,11 +467,21 @@ function autoConnectRoad(g: Game, bx: number, by: number) {
   syncRoads(g);
 }
 
+/** zabraň slitým plochám: nová cesta nesmí vytvořit 2×2 blok cest */
+function wouldFormRoadBlock(g: Game, tx: number, ty: number): boolean {
+  const r = (x: number, y: number) => g.world.roads.has(key(x, y));
+  for (const dx of [-1, 1]) for (const dy of [-1, 1]) {
+    if (r(tx + dx, ty) && r(tx, ty + dy) && r(tx + dx, ty + dy)) return true;
+  }
+  return false;
+}
+
 function tryRoad(g: Game, tx: number, ty: number) {
   const kk = key(tx, ty);
   if (g.world.roads.has(kk) || g.world.occ.has(kk) || g.world.nodeAt(tx, ty)) return;
   const b = g.world.biomeAt(tx, ty);
   if (b === B_WATER || b === B_MOUNTAIN) return;
+  if (wouldFormRoadBlock(g, tx, ty)) return;
   g.world.roads.add(kk);
 }
 
@@ -508,9 +524,9 @@ function placeBuilding(g: Game, t: string, tx: number, ty: number, auto: boolean
 export function demolish(g: Game, idx: number): string | null {
   const s = g.s;
   const inst = s.buildings[idx];
-  if (!inst) return 'Budova neexistuje.';
+  if (!inst) return 'err.terrain';
   const def = B[inst.t];
-  if (def.unbuildable) return 'Náves zbourat nejde.';
+  if (def.unbuildable) return 'err.terrain';
   const n = Math.max(0, countB(g, inst.t) - 1);
   const refund: Rec = {};
   for (const [r, v] of Object.entries(def.cost)) refund[r] = Math.floor(v * Math.pow(1.12, n) * 0.5);
@@ -530,13 +546,13 @@ export function demolish(g: Game, idx: number): string | null {
 /** pokus o stavbu hráčem; vrací chybovou hlášku nebo null při úspěchu */
 export function tryBuild(g: Game, t: string, tx: number, ty: number): string | null {
   const def = B[t];
-  if (!def || def.unbuildable) return 'Tuto budovu nelze postavit.';
-  if (def.tech && !hasTech(g.s, def.tech)) return 'Chybí technologie.';
+  if (!def || def.unbuildable) return 'err.terrain';
+  if (def.tech && !hasTech(g.s, def.tech)) return 'err.tech';
   for (let dy = 0; dy < def.size; dy++) for (let dx = 0; dx < def.size; dx++) {
-    if (!g.world.buildable(tx + dx, ty + dy)) return 'Tady stavět nejde.';
+    if (!g.world.buildable(tx + dx, ty + dy)) return 'err.terrain';
   }
   const cost = buildCost(g, t);
-  if (!canAfford(g, cost)) return 'Nedostatek surovin.';
+  if (!canAfford(g, cost)) return 'err.res';
   pay(g, cost);
   placeBuilding(g, t, tx, ty, false);
   bus.emit('built', { t, x: tx, y: ty });
@@ -582,11 +598,11 @@ export function techAvailable(g: Game, t: string): boolean {
 
 export function buyTech(g: Game, t: string): string | null {
   const def = TECH_BY[t];
-  if (!def) return 'Neznámá technologie.';
-  if (hasTech(g.s, t)) return 'Už vyzkoumáno.';
-  if (!techAvailable(g, t)) return 'Chybí předpoklady.';
-  if ((g.s.res.research || 0) < def.cost) return 'Nedostatek vědy.';
-  if (def.mats && !canAfford(g, def.mats)) return 'Nedostatek materiálu.';
+  if (!def) return 'err.req';
+  if (hasTech(g.s, t)) return 'err.req';
+  if (!techAvailable(g, t)) return 'err.req';
+  if ((g.s.res.research || 0) < def.cost) return 'err.sci';
+  if (def.mats && !canAfford(g, def.mats)) return 'err.res';
   g.s.res.research -= def.cost;
   if (def.mats) pay(g, def.mats);
   const prevEra = g.maxEra;
@@ -608,12 +624,12 @@ export function upgradeCost(g: Game, u: string): Rec {
 
 export function buyUpgrade(g: Game, u: string): string | null {
   const def = UPG_BY[u];
-  if (!def) return 'Neznámý upgrade.';
+  if (!def) return 'err.req';
   const lvl = g.s.upgrades[u] || 0;
-  if (lvl >= def.max) return 'Maximální úroveň.';
-  if (def.reqTech && !hasTech(g.s, def.reqTech)) return 'Chybí technologie.';
+  if (lvl >= def.max) return 'err.max';
+  if (def.reqTech && !hasTech(g.s, def.reqTech)) return 'err.tech';
   const cost = upgradeCost(g, u);
-  if (!canAfford(g, cost)) return 'Nedostatek surovin.';
+  if (!canAfford(g, cost)) return 'err.res';
   pay(g, cost);
   g.s.upgrades[u] = lvl + 1;
   recomputeMults(g);
@@ -683,11 +699,11 @@ export function perkCost(g: Game, id: string): number {
 
 export function buyPerk(g: Game, id: string): string | null {
   const def = PERK_BY[id];
-  if (!def) return 'Neznámý perk.';
+  if (!def) return 'err.req';
   const lvl = g.s.legacy.perks[id] || 0;
-  if (lvl >= def.max) return 'Maximální úroveň.';
+  if (lvl >= def.max) return 'err.max';
   const cost = perkCost(g, id);
-  if (g.s.legacy.pts < cost) return 'Nedostatek Odkazu.';
+  if (g.s.legacy.pts < cost) return 'err.legacy';
   g.s.legacy.pts -= cost;
   g.s.legacy.perks[id] = lvl + 1;
   recomputeMults(g);
