@@ -2,6 +2,8 @@
 
 Jak hru postavit. Navazuje hlavně na [03 — Lidé a práce](03-people-and-work.md) (výkon) a [12 — Save](12-save-system.md).
 
+> **Realizační poznámka (v0.1):** implementace v tomto repozitáři zvolila **odlehčenou variantu** kvůli požadavku na **export do jediného HTML souboru**: Canvas 2D místo PixiJS, vanilla DOM místo Reactu, WebAudio syntéza místo Howler.js + audio souborů, localStorage místo IndexedDB a **procedurální grafiku kreslenou kódem** (žádné externí assety). Všechny architektonické principy níže — oddělení simulace od prezentace, fixed-timestep, agregovaná ekonomika, data-driven obsah, LOD agentů — **platí beze změny** a implementace se jimi řídí. Těžší stack níže zůstává doporučením pro případný přechod na WebGL při větších nárocích.
+
 ---
 
 ## 1. Tech stack (doporučení + zdůvodnění)

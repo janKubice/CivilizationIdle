@@ -2,7 +2,18 @@
 
 > 2D top-down idle klikačka o růstu civilizace — od sbírání kamene rukama až po těžbu laserovými puškami a přepravu vrtulníky.
 
-Tento repozitář zatím obsahuje **kompletní designovou a technickou dokumentaci** hry. Cílem dokumentace je, aby podle ní šlo hru celou naprogramovat — ať už člověkem nebo AI agentem — bez nutnosti dalšího dovysvětlování.
+Repozitář obsahuje **hratelnou hru** (TypeScript + Vite, exportovatelnou jako **jediný HTML soubor**) a **kompletní designovou a technickou dokumentaci**, podle které vznikla a podle které se dá dál rozšiřovat.
+
+## ▶️ Jak hrát
+
+- **Bez instalace:** stáhni / otevři [`civilization-idle.html`](civilization-idle.html) v prohlížeči. Celá hra je jeden soubor — funguje offline, ukládá se do prohlížeče.
+- **Vývoj:**
+  ```bash
+  npm install
+  npm run dev        # dev server s HMR
+  npm run build      # vyrobí dist/index.html — celá hra v jednom HTML souboru
+  npm run typecheck  # tsc --noEmit
+  ```
 
 ---
 
@@ -44,7 +55,7 @@ Dokumenty jdou od „co stavíme a proč" přes „jak to hráč hraje" až po �
 ## Rychlé shrnutí pro netrpělivé
 
 - **Žánr:** idle / incremental / city-builder, top-down 2D, běží v prohlížeči.
-- **Doporučený stack:** TypeScript + Vite + PixiJS (WebGL render) + vlastní data-oriented ECS + React overlay pro UI + Howler.js (audio) + IndexedDB pro save. Detail a alternativy (Phaser) v [dokumentu 11](docs/11-technical-architecture.md).
+- **Implementovaný stack:** TypeScript + Vite + **Canvas 2D** + vanilla DOM UI + **WebAudio syntéza** (zvuky bez souborů) + procedurální grafika kreslená kódem + localStorage save + `vite-plugin-singlefile` → **export do jednoho HTML**. (Dokumentace v [11](docs/11-technical-architecture.md) popisuje i původně doporučenou těžší variantu PixiJS+React — architektonické principy platí pro obě.)
 - **Hlavní technická výzva:** tisíce „lidí-zdrojů" na nekonečné mapě. Řešení = oddělení **ekonomické simulace** (agregovaná, deterministická, tick-based) od **vizuální prezentace** (LOD, jen viditelní agenti se animují). Viz [dokument 03](docs/03-people-and-work.md).
 - **Progrese:** click → gather → build → grow → automate → tech → synergy → ascend.
 
@@ -53,8 +64,19 @@ Dokumenty jdou od „co stavíme a proč" přes „jak to hráč hraje" až po �
 ## Stav projektu
 
 - [x] Kompletní dokumentace a plán
-- [ ] Fáze 0 — kostra projektu (setup, render/tick loop)
-- [ ] Fáze 1 — hratelný prototyp (MVP)
-- [ ] Fáze 2+ — viz [roadmapa](docs/14-roadmap.md)
+- [x] Fáze 0 — kostra projektu (setup, fixed-timestep loop, chunkovaný svět)
+- [x] Fáze 1 — hratelný prototyp (klik-gather, budovy, lidé, slidery, save, offline)
+- [x] Fáze 2 (jádro) — výrobní řetězce, tech tree (éra 0–6), upgrady, organický růst města
+- [x] Fáze 3–4 (jádro) — energie, doprava/haul, eventy (zlatý občan, festival), achievementy s bonusy, **ascension + Odkaz**, lasery 🔴 a vrtulníky 🚁
+- [ ] Fáze 5 — hlubší balanc, mobilní UX, přístupnost, i18n (viz [roadmapa](docs/14-roadmap.md))
 
-Licence a další organizační věci budou doplněny při startu implementace.
+### Struktura kódu (`src/`)
+
+| Soubor | Role |
+|--------|------|
+| `sim.ts`, `state.ts`, `worldgen.ts`, `data.ts` | **Simulace** — headless, deterministická; obsah je data-driven |
+| `render.ts`, `sprites.ts` | **Prezentace** — canvas render, LOD agenti, particly, den/noc, minimapa |
+| `ui.ts` | HUD, panely (stavby/práce/věda/vylepšení/úspěchy/vzestup), menu, modaly |
+| `audio.ts` | Syntetizované SFX + generativní hudba (WebAudio) |
+| `save.ts` | localStorage save, export/import, migrace |
+| `main.ts` | bootstrap, herní smyčka, vstup (myš/dotyk/klávesnice) |
