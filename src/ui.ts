@@ -6,7 +6,8 @@ import { Game, slots, sumAssigned, housingCap, waterCap, capOf } from './state';
 import {
   buildCost, canAfford, upgradeCost, buyTech, buyUpgrade, setAssign, hasTech, techAvailable,
   ascendGain, ascensionUnlocked, civScore, perkCost, buyPerk, doAscend, demolish, haulEffOf,
-  upgradeCostB, upgradeEraOk, upgradeBuilding, findMergeGroup, mergeBuildings, splitBuilding, OfflineSummary,
+  upgradeCostB, upgradeEraOk, upgradeBuilding, findMergeGroup, mergeBuildings, splitBuilding,
+  repairCost, repairBuilding, OfflineSummary,
 } from './sim';
 import { saveGame, exportSave, importSave, hardReset } from './save';
 import { t, tn, td, tres, tjob, tera, setLang, getLang, LANGS, Lang } from './i18n';
@@ -79,6 +80,8 @@ export function showBuildingInfo(idx: number) {
   let body = `<h3>${def.icon} ${esc(tn('b', inst.t))}${inst.big ? ' ★' : ''}${lvl > 1 ? ` <span class="badge">${ROMAN[lvl - 1]}</span>` : ''}${inst.auto ? ` <span class="badge">${t('binfo.auto')}</span>` : ''}</h3>
     <p>${esc(td('b', inst.t))}</p>`;
   const rows: string[] = [];
+  if (inst.fire) rows.push(`<b style="color:#ff7b72">${t('binfo.fire')}</b>`);
+  if (inst.dmg) rows.push(`<b style="color:#ff7b72">${t('binfo.dmg')}</b>`);
   if (inst.big) rows.push(t('binfo.big'));
   if (lvl > 1) rows.push(t('binfo.lvl', ROMAN[lvl - 1]));
   if (def.jobs) {
@@ -94,6 +97,17 @@ export function showBuildingInfo(idx: number) {
   if (rows.length) body += `<p style="line-height:1.7">${rows.join('<br>')}</p>`;
 
   const btns: { label: string; cls?: string; cb?: () => void }[] = [];
+  // oprava vyhořelé budovy
+  const rcost = repairCost(g, idx);
+  if (rcost) {
+    btns.push({
+      label: `🔧 ${t('binfo.repair')} (${costStr(rcost)})`,
+      cb: () => {
+        const err = repairBuilding(g, idx);
+        if (err) { toast('⚠️ ' + t(err)); bus.emit('error'); }
+      },
+    });
+  }
   // vylepšení úrovně
   const ucost = upgradeCostB(g, idx);
   if (ucost) {
@@ -245,6 +259,28 @@ function renderBuild() {
     pbody.appendChild(tabs);
   } else buildTab = 'all';
   pbody.appendChild(el('div', 'idlebox', `<span>${t('build.info')}</span>`));
+
+  // Guvernér: přepínače auto-stavění
+  if (g.m.governor) {
+    const gov = el('div', 'idlebox');
+    gov.innerHTML = `<span>🏛️ <b>${t('auto.title')}</b></span>`;
+    const wrap = el('span');
+    const opts: [string, string][] = [['food', '🌾'], ['wood', '🪵'], ['store', '📦'], ['water', '💧']];
+    for (const [key2, ic] of opts) {
+      const lb = el('label');
+      lb.style.cssText = 'display:inline-flex;align-items:center;gap:3px;margin-left:8px;font-size:12px;cursor:pointer';
+      const c = document.createElement('input');
+      c.type = 'checkbox';
+      c.checked = !!g.s.auto[key2];
+      c.onchange = () => { g.s.auto[key2] = c.checked; };
+      lb.appendChild(c);
+      lb.appendChild(document.createTextNode(ic));
+      lb.title = t('auto.' + key2);
+      wrap.appendChild(lb);
+    }
+    gov.appendChild(wrap);
+    pbody.appendChild(gov);
+  }
 
   for (const def of unlocked) {
     if (buildTab !== 'all' && def.cat !== buildTab) continue;
@@ -718,6 +754,16 @@ export function initUI(game: Game, opts: { renderer: Renderer; onNewGame: () => 
   bus.on('district', () => toast(t('toast.district'), 'gold'));
   bus.on('season', (e: any) => toast(`${SEASON_ICONS[e.season]} ${t('toast.season', t('season.' + e.season))}`));
   bus.on('railsLaid', () => toast(t('toast.rails'), 'gold'));
+  bus.on('fire', (e: any) => toast(t('toast.fire', esc(tn('b', e.t))), 'ach'));
+  bus.on('fireOut', (e: any) => toast(t('toast.fireOut', esc(tn('b', e.t)))));
+  bus.on('burned', (e: any) => toast(t('toast.burned', esc(tn('b', e.t))), 'ach'));
+  bus.on('repaired', (e: any) => toast(t('toast.repaired', esc(tn('b', e.t)))));
+  bus.on('circus', () => toast(t('toast.circus'), 'gold'));
+  bus.on('meteor', (e: any) => toast(t('toast.meteor', fmt(e.amt), esc(tres(e.res))), 'gold'));
+  bus.on('govBuilt', (e: any) => {
+    const now2 = Date.now();
+    if (now2 - lastGovToast > 60000) { lastGovToast = now2; toast(t('toast.gov', esc(tn('b', e.t)))); }
+  });
   bus.on('storageFull', (e: any) => {
     const d = RES_BY[e.res];
     toast(t('toast.full', d?.icon || '', esc(tres(e.res))));
@@ -731,6 +777,7 @@ export function initUI(game: Game, opts: { renderer: Renderer; onNewGame: () => 
   });
 }
 
+let lastGovToast = 0;
 let uiTimer = 0, hintTimer = 0, slowPanelTimer = 0;
 export function uiFrame(dt: number) {
   uiTimer -= dt;

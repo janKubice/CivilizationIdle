@@ -51,6 +51,7 @@ function migrate(s: any): GameState | null {
   s.upgrades = s.upgrades || {};
   s.assigned = s.assigned || {};
   s.totals = s.totals || {};
+  s.auto = s.auto || {};
   s.nextFestival = s.nextFestival || 0;
   return s as GameState;
 }

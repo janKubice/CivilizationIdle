@@ -6,7 +6,7 @@ import { clamp, bus } from './util';
 import { Game, newState, initGame } from './state';
 import {
   recomputeMults, tick, slowTick, makeSimRand, gather, tryBuild,
-  collectGolden, computeOffline, freshRun,
+  collectGolden, computeOffline, freshRun, extinguishClick,
 } from './sim';
 import { Renderer } from './render';
 import { initUI, uiFrame, showTitle, showOffline, openPanel, toast, showBuildingInfo } from './ui';
@@ -199,9 +199,12 @@ function handleClick(sx: number, sy: number) {
     return;
   }
 
-  // klik na budovu → informace / bourání
+  // klik na budovu → hašení požáru, jinak informace / bourání
   const bIdx = g.world.occ.get(`${tx},${ty}`);
-  if (bIdx !== undefined) showBuildingInfo(bIdx);
+  if (bIdx !== undefined) {
+    if (g.s.buildings[bIdx]?.fire) { extinguishClick(g, bIdx); return; }
+    showBuildingInfo(bIdx);
+  }
 }
 
 // ---------- smyčka ----------

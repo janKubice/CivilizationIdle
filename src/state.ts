@@ -12,12 +12,14 @@ export interface BuildingInst {
   lvl?: number;    // úroveň budovy (1 default, max 3): efektivita ×2/×4
   big?: 1;         // "velká budova" — sloučená 4-v-1, zabírá 2×2, +50 % výkon
   dm?: number;     // čtvrťový bonus (cache z recount)
+  fire?: number;   // hoří! zbývající sekundy požáru (klikáním se hasí)
+  dmg?: 1;         // vyhořelá — neprodukuje, nutná oprava
 }
 
 /** efektivita podle úrovně budovy */
 export const lvlEff = (lvl?: number) => (lvl === 3 ? 4 : lvl === 2 ? 2 : 1);
 
-export interface Buff { kind: 'frenzy' | 'clickFrenzy' | 'festival'; mult: number; until: number; label: string; icon: string }
+export interface Buff { kind: 'frenzy' | 'clickFrenzy' | 'festival' | 'circus'; mult: number; until: number; label: string; icon: string }
 
 export interface Settings {
   sfx: number; music: number; muted: boolean;
@@ -41,6 +43,7 @@ export interface GameState {
   achs: string[];
   clicks: number;
   buffs: Buff[];
+  auto: Record<string, boolean>;     // Guvernér: auto-stavění (food/wood/store/water)
   legacy: { pts: number; perks: Rec };
   stats: { peakPop: number; goldenClicked: number; ascensions: number; lifetimeClicks: number };
   settings: Settings;
@@ -55,6 +58,7 @@ export interface Mults {
   critChance: number; critMult: number; goldenFreq: number;
   offlineEff: number; offlineCapH: number; kinetic: number;
   autoAssign: boolean;
+  governor: boolean;
 }
 
 export interface GoldenCitizen { tx: number; ty: number; until: number }
@@ -122,6 +126,7 @@ export function newState(seed: number, carry?: { legacy: GameState['legacy']; ac
     achs: carry?.achs ?? [],
     clicks: 0,
     buffs: [],
+    auto: {},
     legacy,
     stats: carry?.stats ?? { peakPop: 0, goldenClicked: 0, ascensions: 0, lifetimeClicks: 0 },
     settings: carry?.settings ?? defaultSettings(),
@@ -137,6 +142,7 @@ export function baseMults(): Mults {
     critChance: 0.02, critMult: 10, goldenFreq: 1,
     offlineEff: 0.5, offlineCapH: 8, kinetic: 0,
     autoAssign: false,
+    governor: false,
   };
 }
 
@@ -184,6 +190,7 @@ export function recount(g: Game) {
     c[b.t] = (c[b.t] || 0) + 1;
     const def = B[b.t];
     if (!def) continue;
+    if (b.fire || b.dmg) continue; // hořící/vyhořelé budovy nefungují
     const bigMult = b.big ? 4 : 1;
     const le = lvlEff(b.lvl);
     if (def.jobs) sl[b.t] = (sl[b.t] || 0) + def.jobs * bigMult;

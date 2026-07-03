@@ -66,6 +66,7 @@ export const BUILDINGS: BDef[] = [
   { id: 'park', name: 'Park', icon: '🌳', desc: 'Zeleň mezi domy. Zvyšuje spokojenost, město je občas sází samo.', era: 1, cat: 'city', cost: { wood: 25, stone: 5 }, size: 1, hap: 0.03 },
   { id: 'fountain', name: 'Fontána', icon: '⛲', desc: 'Ozdoba náměstí. Zvyšuje spokojenost.', era: 2, cat: 'city', cost: { stone: 60, gold: 30 }, size: 1, hap: 0.04, tech: 'masonry' },
   { id: 'statue', name: 'Socha', icon: '🗽', desc: 'Pocta zakladatelům. Zvyšuje spokojenost.', era: 2, cat: 'city', cost: { stone: 100, gold: 80 }, size: 1, hap: 0.05, tech: 'theology' },
+  { id: 'fireStation', name: 'Hasičská stanice', icon: '🚒', desc: 'Hasiči rychle uhasí požáry budov v okolí (dosah 8).', era: 2, cat: 'city', cost: { stone: 60, plank: 20 }, size: 1, tech: 'masonry' },
   { id: 'sawmill', name: 'Pila', icon: '🪚', desc: 'Řeže dřevo na prkna (2 dřevo → 1 prkno).', era: 1, cat: 'ind', cost: { wood: 50, stone: 15 }, size: 1, jobs: 2, jobName: 'Pilaři', recipe: { inputs: { wood: 1 }, outputs: { plank: 0.5 } }, tech: 'woodworking' },
   { id: 'farm', name: 'Farma', icon: '🌾', desc: 'Stabilní a vydatný zdroj jídla.', era: 1, cat: 'food', cost: { wood: 35, plank: 10 }, size: 1, jobs: 3, jobName: 'Farmáři', prod: { res: 'food', rate: 1.1 }, raw: true, tech: 'agriculture' },
   { id: 'copperMine', name: 'Měděný důl', icon: '⚒️', desc: 'Horníci těží měděnou rudu.', era: 1, cat: 'mine', cost: { wood: 40, plank: 10 }, size: 1, jobs: 2, jobName: 'Horníci (Cu)', prod: { res: 'copperOre', rate: 0.25 }, raw: true, tech: 'copperSmelting' },
@@ -148,7 +149,7 @@ export interface UDef {
   id: string; name: string; icon: string; desc: string;
   max: number; base: Rec; growth: number;
   reqTech?: string;
-  fx: { job?: Record<string, number>; click?: number; capacity?: number; research?: number; hap?: number; housing?: number; growth?: number; haulX?: number; critChance?: number; goldenFreq?: number; kinetic?: number; special?: 'autoAssign' | 'sciPerTech' };
+  fx: { job?: Record<string, number>; click?: number; capacity?: number; research?: number; hap?: number; housing?: number; growth?: number; haulX?: number; critChance?: number; goldenFreq?: number; kinetic?: number; special?: 'autoAssign' | 'sciPerTech' | 'governor' };
 }
 
 export const UPGRADES: UDef[] = [
@@ -166,6 +167,7 @@ export const UPGRADES: UDef[] = [
   { id: 'goldRush', name: 'Zlatá horečka', icon: '🌟', desc: 'Zlatí občané chodí 2× častěji.', max: 1, base: { gold: 2000 }, growth: 1, fx: { goldenFreq: 2 } },
   { id: 'kineticClick', name: 'Kinetický klik', icon: '⚡', desc: 'Každý klik navíc přidá 2 % produkce dané suroviny za sekundu.', max: 1, base: { gold: 5000 }, growth: 1, reqTech: 'industrialization', fx: { kinetic: 0.02 } },
   { id: 'academy', name: 'Akademie', icon: '🎓', desc: 'Knihovny ×1,5 za úroveň.', max: 5, base: { gold: 800, plank: 200 }, growth: 4, reqTech: 'education', fx: { job: { library: 1.5 } } },
+  { id: 'governor', name: 'Guvernér', icon: '🏛️', desc: 'Město staví samo podle potřeb: jídlo, dřevo, sklady, studny (zapíná se v panelu Stavby).', max: 1, base: { gold: 800 }, growth: 1, reqTech: 'writing', fx: { special: 'governor' } },
 ];
 export const UPG_BY: Record<string, UDef> = Object.fromEntries(UPGRADES.map(u => [u.id, u]));
 

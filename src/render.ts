@@ -82,6 +82,15 @@ export class Renderer {
     bus.on('festival', () => {
       for (let i = 0; i < 40; i++) this.burst(Math.random() * 200 - 100, Math.random() * 200 - 100, ['#d84848', '#ffd777', '#4a8040', '#8fb8ff'][i % 4], 2);
     });
+    bus.on('extinguish', (e: any) => {
+      if (this.g.s.settings.particles) this.burst(e.x * TILE + TILE / 2, e.y * TILE, '#6fc8f0', 8);
+    });
+    bus.on('meteor', () => {
+      const wx = (Math.random() - 0.5) * 300, wy = (Math.random() - 0.5) * 300;
+      this.burst(wx, wy, '#ff9840', 40);
+      this.burst(wx, wy, '#ffd74a', 25);
+      this.float(wx, wy - 10, '☄️', '#ffb84a', true);
+    });
     bus.on('ascend', () => this.reset());
     bus.on('worldReset', () => this.reset());
   }
@@ -419,7 +428,27 @@ export class Renderer {
       if (!sp) continue;
       const sh = size === 2 ? 80 : 44;
       const [sx, sy] = this.worldToScreen(b.x * TILE, b.y * TILE - (sh - size * TILE));
+      if (b.dmg) x.globalAlpha = 0.45;
       x.drawImage(sp, sx, sy, size * TILE * z, sh * z);
+      x.globalAlpha = 1;
+      // hořící budova: záře + plameny
+      if (b.fire) {
+        const cx2 = b.x * TILE + size * TILE / 2, cy2 = b.y * TILE + size * TILE / 2;
+        const [gx, gy] = this.worldToScreen(cx2, cy2);
+        x.fillStyle = `rgba(255,120,30,${0.25 + 0.12 * Math.sin(now / 90)})`;
+        x.beginPath(); x.arc(gx, gy, size * TILE * z * 0.7, 0, 7); x.fill();
+        if (g.s.settings.particles && Math.random() < 0.5) {
+          this.particles.push({
+            x: cx2 + (Math.random() - 0.5) * size * TILE * 0.7, y: cy2,
+            vx: (Math.random() - 0.5) * 10, vy: -35 - Math.random() * 25,
+            life: 1, max: 0.7, color: ['#ff8830', '#ffb84a', '#e84a20'][(Math.random() * 3) | 0], size: 3,
+          });
+        }
+      }
+      // vyhořelá: doutnající kouř
+      if (b.dmg && g.s.settings.particles && Math.random() < 0.05) {
+        this.particles.push({ x: b.x * TILE + size * TILE / 2, y: b.y * TILE, vx: 3, vy: -12, life: 1, max: 2, color: '#55555590', size: 3 });
+      }
       // pipsy úrovně (zlaté kosočtverce nad budovou)
       if (b.lvl && b.lvl > 1) {
         x.fillStyle = '#ffd74a';

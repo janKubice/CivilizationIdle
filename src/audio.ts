@@ -169,4 +169,20 @@ export function initAudio(game: Game) {
     if (!ctx || !throttled('full', 2000)) return;
     blip(520, 0.09, 'sine', 0.08); blip(390, 0.12, 'sine', 0.08, 0, 0.1);
   });
+  bus.on('fire', () => {
+    if (!ctx) return;
+    for (let i = 0; i < 3; i++) { blip(720, 0.18, 'square', 0.1, 0, i * 0.28); blip(560, 0.18, 'square', 0.1, 0, i * 0.28 + 0.14); }
+  });
+  bus.on('extinguish', () => {
+    if (!ctx || !throttled('ext', 80)) return;
+    blip(300, 0.08, 'sine', 0.1, -120);
+  });
+  bus.on('meteor', () => {
+    if (!ctx) return;
+    blip(90, 0.6, 'square', 0.2, -50); blip(1200, 0.4, 'sine', 0.1, -900);
+  });
+  bus.on('circus', () => {
+    if (!ctx) return;
+    [523, 659, 523, 784, 659, 1047].forEach((f, i) => blip(f, 0.14, 'square', 0.09, 0, i * 0.11));
+  });
 }

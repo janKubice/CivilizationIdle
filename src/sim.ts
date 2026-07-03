@@ -49,6 +49,7 @@ export function recomputeMults(g: Game) {
       if (fx.job) for (const [k, v] of Object.entries(fx.job)) m.job[k] = (m.job[k] || 1) * v;
     }
     if (fx.special === 'autoAssign') m.autoAssign = true;
+    if (fx.special === 'governor') m.governor = true;
     if (fx.special === 'sciPerTech') m.research *= 1 + 0.005 * s.techs.length;
   }
 
@@ -135,6 +136,7 @@ export function tick(g: Game, dt: number) {
     if (b.kind === 'frenzy') frenzy *= b.mult;
     else if (b.kind === 'clickFrenzy') cFrenzy *= b.mult;
     else if (b.kind === 'festival') festHap += 0.2;
+    else if (b.kind === 'circus') festHap += 0.15;
   }
   g.frenzy = frenzy; g.clickFrenzy = cFrenzy;
 
@@ -157,7 +159,7 @@ export function tick(g: Game, dt: number) {
   const tf: Record<string, { s: number; n: number }> = {};
   for (const b of s.buildings) {
     const bd = B[b.t];
-    if (!bd?.jobs) continue;
+    if (!bd?.jobs || b.fire || b.dmg) continue;
     const haul = bd.noHaul ? 1 : haulEffOf(b.d ?? 0, m.haulRange);
     const f = haul * (b.adj || 1) * lvlEff(b.lvl) * (b.big ? 1.5 : 1) * (b.dm || 1);
     const e = tf[b.t] || (tf[b.t] = { s: 0, n: 0 });
@@ -343,6 +345,54 @@ export function slowTick(g: Game, seconds: number, rand: () => number) {
   // auto-přiřazení (Předák)
   if (g.m.autoAssign) autoAssign(g);
 
+  // --- požáry ---
+  let fireChanged = false;
+  for (const b of s.buildings) {
+    if (!b.fire) continue;
+    let rate = 1;
+    // hasičská stanice v okolí hasí 5× rychleji
+    for (const o of s.buildings) {
+      if (o.t === 'fireStation' && !o.dmg && Math.max(Math.abs(o.x - b.x), Math.abs(o.y - b.y)) <= 8) { rate = 5; break; }
+    }
+    b.fire -= seconds * rate;
+    if (b.fire <= 0) {
+      delete b.fire;
+      if (rate > 1) bus.emit('fireOut', { t: b.t }); // uhasili hasiči
+      else { b.dmg = 1; bus.emit('burned', { t: b.t, x: b.x, y: b.y }); }
+      fireChanged = true;
+    }
+  }
+  if (fireChanged) recount(g);
+  // vznik požáru (jen když je co pálit; ~1× za 6 min)
+  if (s.buildings.length > 6 && rand() < seconds / 360) {
+    const cands = s.buildings.filter(b => !b.fire && !b.dmg && !B[b.t].unbuildable && (B[b.t].jobs || B[b.t].housing));
+    if (cands.length) {
+      const victim = cands[Math.floor(rand() * cands.length)];
+      victim.fire = 30;
+      recount(g);
+      bus.emit('fire', { t: victim.t, x: victim.x, y: victim.y });
+    }
+  }
+
+  // --- cirkus (pozitivní event) ---
+  if (countB(g, 'market') > 0 && rand() < seconds / 600 && !s.buffs.some(b => b.kind === 'circus')) {
+    s.buffs.push({ kind: 'circus', mult: 1, until: Date.now() + 90000, label: '', icon: '🎪' });
+    bus.emit('circus');
+  }
+
+  // --- meteor (vzácný dar z nebes) ---
+  if (g.maxEra >= 2 && rand() < seconds / 900) {
+    const res = rand() < 0.5 ? 'ironOre' : 'copperOre';
+    const amt = Math.max(60, Math.floor((g.rates[res] || 0) * 300));
+    s.res[res] = Math.min(capOf(g, res), (s.res[res] || 0) + amt);
+    s.totals[res] = (s.totals[res] || 0) + amt;
+    s.buffs.push({ kind: 'clickFrenzy', mult: 10, until: Date.now() + 15000, label: '', icon: '☄️' });
+    bus.emit('meteor', { res, amt });
+  }
+
+  // --- Guvernér: auto-stavění podle potřeb ---
+  if (g.m.governor) governorTick(g, rand);
+
   // achievementy
   for (const a of ACHS) {
     if (s.achs.includes(a.id)) continue;
@@ -369,6 +419,82 @@ export function slowTick(g: Game, seconds: number, rand: () => number) {
   }
 }
 const storageWarn: Rec = {};
+
+/** klik na hořící budovu = hašení */
+export function extinguishClick(g: Game, idx: number): boolean {
+  const b = g.s.buildings[idx];
+  if (!b || !b.fire) return false;
+  b.fire -= 4;
+  bus.emit('extinguish', { x: b.x, y: b.y });
+  if (b.fire <= 0) {
+    delete b.fire;
+    recount(g);
+    bus.emit('fireOut', { t: b.t });
+  }
+  return true;
+}
+
+export function repairCost(g: Game, idx: number): Rec | null {
+  const b = g.s.buildings[idx];
+  if (!b || !b.dmg) return null;
+  const out: Rec = {};
+  for (const [r, v] of Object.entries(B[b.t].cost)) out[r] = Math.max(1, Math.floor(v * 0.3 * (b.big ? 4 : 1)));
+  return out;
+}
+
+export function repairBuilding(g: Game, idx: number): string | null {
+  const cost = repairCost(g, idx);
+  if (!cost) return 'err.req';
+  if (!canAfford(g, cost)) return 'err.res';
+  pay(g, cost);
+  delete g.s.buildings[idx].dmg;
+  recount(g);
+  bus.emit('repaired', { t: g.s.buildings[idx].t });
+  return null;
+}
+
+/** Guvernér: postaví max. 1 budovu za tick podle zapnutých potřeb */
+function governorTick(g: Game, rand: () => number) {
+  const s = g.s;
+  const auto = s.auto || {};
+  const tryGovBuild = (t: string): boolean => {
+    const cost = buildCost(g, t);
+    if (!canAfford(g, cost)) return false;
+    const spot = findAutoSpot(g, rand);
+    if (!spot) return false;
+    pay(g, cost);
+    placeBuilding(g, t, spot[0], spot[1], true);
+    bus.emit('built', { t, x: spot[0], y: spot[1], auto: true });
+    bus.emit('govBuilt', { t });
+    return true;
+  };
+  // nejdřív obsaď volné sloty nezaměstnanými, teprve pak stav
+  const fillOrBuild = (t: string): boolean => {
+    const free = slots(g, t) - (s.assigned[t] || 0);
+    const idle = s.pop - sumAssigned(s);
+    if (free > 0 && idle > 0) { setAssign(g, t, (s.assigned[t] || 0) + Math.min(free, idle)); return true; }
+    if (free <= 0) return tryGovBuild(t);
+    return false;
+  };
+  // 1) jídlo: produkce nestíhá spotřebu
+  if (auto.food && (g.rates.food || 0) < s.pop * 0.08 * 1.15) {
+    if (fillOrBuild(hasTech(s, 'agriculture') ? 'farm' : 'gatherHut')) return;
+  }
+  // 2) dřevo: záporná bilance (zima!) nebo skoro nic
+  if (auto.wood && (g.rates.wood || 0) < 0.1 && fillOrBuild('forestCamp')) return;
+  // 3) sklady: něco přetéká
+  if (auto.store) {
+    for (const r of RES) {
+      const cap = capOf(g, r.id);
+      if (isFinite(cap) && (s.res[r.id] || 0) >= cap * 0.95 && (g.rates[r.id] || 0) > 0.01) {
+        if (tryGovBuild('storehouse')) return;
+        break;
+      }
+    }
+  }
+  // 4) voda: nedostatečné pokrytí
+  if (auto.water && waterCap(g) < s.pop && tryGovBuild('well')) return;
+}
 
 function autoAssign(g: Game) {
   const s = g.s;

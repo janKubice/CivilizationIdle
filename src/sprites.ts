@@ -262,6 +262,14 @@ export function makeSprites() {
     x.fillStyle = '#ffd74a'; x.beginPath(); x.arc(24.5, 17, 1.8, 0, 7); x.fill();
   });
 
+  sprites.fireStation = c(32, 44, x => {
+    box(x, 4, 20, 24, 18, '#b83a2e');
+    roof(x, 4, 20, 24, 8, '#8a2a20');
+    x.fillStyle = '#e8d8b0'; x.fillRect(11, 26, 10, 12);   // vrata
+    x.strokeStyle = '#00000030'; x.strokeRect(11.5, 26.5, 9, 11);
+    x.fillStyle = '#ffd74a'; x.beginPath(); x.arc(16, 23, 2, 0, 7); x.fill(); // zvon
+  });
+
   // ---- rybaření ----
   sprites.fishHut = c(32, 44, x => {
     box(x, 6, 24, 20, 14, '#8a7250');
