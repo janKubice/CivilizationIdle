@@ -5,6 +5,7 @@ import { GameState, Game, defaultSettings } from './state';
 
 export function serialize(g: Game): string {
   g.s.roads = [...g.world.roads];
+  g.s.rails = [...g.world.rails];
   g.s.saved = Date.now();
   return JSON.stringify(g.s);
 }
@@ -44,6 +45,7 @@ function migrate(s: any): GameState | null {
   s.stats = { peakPop: 0, goldenClicked: 0, ascensions: 0, lifetimeClicks: 0, ...(s.stats || {}) };
   s.nodeDelta = s.nodeDelta || {};
   s.roads = s.roads || [];
+  s.rails = s.rails || [];
   s.achs = s.achs || [];
   s.techs = s.techs || [];
   s.upgrades = s.upgrades || {};

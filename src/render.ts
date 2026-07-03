@@ -3,7 +3,7 @@
 
 import { TILE, CHUNK, CHUNK_PX, BIOME_COLORS, B_WATER, MAX_AGENTS, MAX_PARTICLES } from './config';
 import { clamp, lerp, hash2, key, bus, fmt } from './util';
-import { B, BUILDINGS, RES_BY, NODE_DEFS, N_TREE, N_BERRY, N_ROCK, N_COPPER, N_IRON, N_COAL } from './data';
+import { B, BUILDINGS, RES_BY, NODE_DEFS, N_TREE, N_BERRY, N_ROCK, N_COPPER, N_IRON, N_COAL, N_FISH, SEASON_ICONS } from './data';
 import { Game, BuildingInst, activeWorkers, slots } from './state';
 import { hasTech } from './sim';
 import { sprites, makeSprites, NIGHT_WINDOWS } from './sprites';
@@ -19,9 +19,11 @@ interface Agent {
   timer: number;
   color: string; carry: string | null;
   speed: number; variant: number;
-  kind?: 'horse' | 'tractor';   // vozidla/zvířata na velkostatcích
+  kind?: 'horse' | 'tractor' | 'boat';   // vozidla/zvířata/loďky
 }
 interface Bird { x: number; y: number; vx: number; ph: number }
+interface Train { path: [number, number][]; dist: number; dir: 1 | -1; pause: number; len: number }
+interface Flake { x: number; y: number; vy: number; vx: number; ph: number }
 interface Heli { x: number; y: number; tx: number; ty: number; rot: number }
 
 const AGENT_COLORS: Record<string, string> = {
@@ -32,7 +34,7 @@ const AGENT_COLORS: Record<string, string> = {
   factory: '#9fb4d8', hitechLab: '#6fd8c8', trainStation: '#b8a97e', idle: '#d8c8b0',
 };
 
-const NODE_SPRITES = ['tree', 'berry', 'rock', 'copperVein', 'ironVein', 'coalVein'];
+const NODE_SPRITES = ['tree', 'berry', 'rock', 'copperVein', 'ironVein', 'coalVein', 'fishShoal'];
 
 export class Renderer {
   cv: HTMLCanvasElement;
@@ -49,6 +51,9 @@ export class Renderer {
   private helis: Heli[] = [];
   private birds: Bird[] = [];
   private birdTimer = 8;
+  private trains: Train[] = [];
+  private trainStations = -1;
+  private precip: Flake[] = [];
   private agentSync = 0;
   private mini: HTMLCanvasElement | null = null;
   private miniTimer = 0;
@@ -165,6 +170,32 @@ export class Renderer {
         const k = `w:${i}:${a}`;
         wanted.add(k);
         if (!this.agentMap.has(k)) this.agentMap.set(k, this.makeAgent(g, i, a));
+      }
+    }
+    // loďky rybářů
+    for (let i = 0; i < g.s.buildings.length && budget > 0; i++) {
+      const b = g.s.buildings[i];
+      if (b.t !== 'fishHut' || !activeWorkers(g, 'fishHut')) continue;
+      const wx = b.x * TILE, wy = b.y * TILE;
+      if (wx < view[0] || wx > view[2] || wy < view[1] || wy > view[3]) continue;
+      const k = `boat:${i}`;
+      wanted.add(k); budget--;
+      if (!this.agentMap.has(k)) {
+        // najdi vodu poblíž (cíl vyjížďky)
+        let target: [number, number] | null = null;
+        outer: for (let r = 2; r <= 7; r++) for (let a = 0; a < 12; a++) {
+          const ang = (a / 12) * 6.28;
+          const tx2 = b.x + Math.round(Math.cos(ang) * r), ty2 = b.y + Math.round(Math.sin(ang) * r);
+          if (g.world.biomeAt(tx2, ty2) === 0) { target = [tx2 * TILE + TILE / 2, ty2 * TILE + TILE / 2]; break outer; }
+        }
+        if (target) {
+          this.agentMap.set(k, {
+            bIdx: i, x: wx + TILE / 2, y: wy + TILE / 2,
+            path: [[wx + TILE / 2, wy + TILE / 2], target],
+            seg: 0, t: Math.random(), state: 'loop', timer: 0,
+            color: '#8a6b42', carry: null, speed: 20, variant: 0, kind: 'boat',
+          });
+        }
       }
     }
     // koně / traktory na velkostatcích (velké farmy)
@@ -332,6 +363,26 @@ export class Renderer {
       }
     }
 
+    // --- koleje (pražce + dvě kolejnice ke skutečným sousedům) ---
+    if (g.world.rails.size) {
+      const hasRail = (tx: number, ty: number) => g.world.rails.has(key(tx, ty));
+      for (const rk of g.world.rails) {
+        const ci = rk.indexOf(',');
+        const tx = +rk.slice(0, ci), ty = +rk.slice(ci + 1);
+        if (tx < t0x || tx > t1x || ty < t0y || ty > t1y) continue;
+        const [sx, sy] = this.worldToScreen(tx * TILE, ty * TILE);
+        const T = TILE * z, mid = T / 2;
+        const horiz = hasRail(tx + 1, ty) || hasRail(tx - 1, ty);
+        const vert = hasRail(tx, ty + 1) || hasRail(tx, ty - 1);
+        x.fillStyle = '#5a4a38';
+        if (horiz || !vert) for (let i = 0; i < 4; i++) x.fillRect(sx + (i + 0.25) * T / 4, sy + mid - 6 * z, 2.5 * z, 12 * z);
+        if (vert) for (let i = 0; i < 4; i++) x.fillRect(sx + mid - 6 * z, sy + (i + 0.25) * T / 4, 12 * z, 2.5 * z);
+        x.fillStyle = '#8d939c';
+        if (horiz || !vert) { x.fillRect(sx, sy + mid - 4 * z, T, 1.6 * z); x.fillRect(sx, sy + mid + 3 * z, T, 1.6 * z); }
+        if (vert) { x.fillRect(sx + mid - 4 * z, sy, 1.6 * z, T); x.fillRect(sx + mid + 3 * z, sy, 1.6 * z, T); }
+      }
+    }
+
     // --- uzly ---
     for (let cy = c0y; cy <= c1y; cy++) for (let cx = c0x; cx <= c1x; cx++) {
       const chunk = g.world.chunk(cx, cy);
@@ -339,7 +390,7 @@ export class Renderer {
         if (n.tx < t0x - 1 || n.tx > t1x + 1 || n.ty < t0y - 2 || n.ty > t1y + 1) continue;
         let sp: HTMLCanvasElement;
         if (n.stock <= 0.5) {
-          sp = n.kind === N_TREE ? sprites.stump : n.kind === N_BERRY ? sprites.berryEmpty : n.kind === N_ROCK ? sprites.rock : sprites.veinEmpty;
+          sp = n.kind === N_TREE ? sprites.stump : n.kind === N_BERRY ? sprites.berryEmpty : n.kind === N_ROCK ? sprites.rock : n.kind === N_FISH ? sprites.fishEmpty : sprites.veinEmpty;
         } else {
           sp = n.kind === N_TREE ? sprites['tree' + n.variant] : sprites[NODE_SPRITES[n.kind]];
         }
@@ -455,6 +506,16 @@ export class Renderer {
         x.beginPath(); x.moveTo(sx - 6 * s, sy - 3 * s); x.lineTo(sx - 10 * s, sy); x.stroke();
         continue;
       }
+      if (a.kind === 'boat') {
+        x.fillStyle = 'rgba(200,230,255,.25)'; x.beginPath(); x.ellipse(sx, sy + 3 * s, 8 * s, 2.5 * s, 0, 0, 7); x.fill();
+        x.fillStyle = '#8a6b42';
+        x.beginPath(); x.moveTo(sx - 7 * s, sy); x.quadraticCurveTo(sx, sy + 5 * s, sx + 7 * s, sy); x.lineTo(sx + 5 * s, sy - 2 * s); x.lineTo(sx - 5 * s, sy - 2 * s); x.closePath(); x.fill();
+        x.fillStyle = '#5d6e7a'; x.fillRect(sx - 1.5 * s, sy - 7 * s, 3 * s, 5 * s);   // rybář
+        x.fillStyle = '#e8c49a'; x.beginPath(); x.arc(sx, sy - 8.5 * s, 2 * s, 0, 7); x.fill();
+        x.strokeStyle = '#4a3820'; x.lineWidth = s;
+        x.beginPath(); x.moveTo(sx + 2 * s, sy - 6 * s); x.lineTo(sx + 9 * s, sy - 9 * s); x.stroke();
+        continue;
+      }
       if (a.kind === 'tractor') {
         x.fillStyle = '#00000030'; x.beginPath(); x.ellipse(sx, sy + 2 * s, 7 * s, 2.2 * s, 0, 0, 7); x.fill();
         x.fillStyle = '#c8352a';
@@ -532,6 +593,67 @@ export class Renderer {
       }
     }
 
+    // --- vláčky mezi nádražími ---
+    {
+      const stations = g.s.buildings.filter(b => b.t === 'trainStation');
+      if (stations.length !== this.trainStations) {
+        this.trainStations = stations.length;
+        this.trains = [];
+        for (let i = 1; i < stations.length; i++) {
+          const a = stations[i - 1], b2 = stations[i];
+          const p0: [number, number] = [(a.x + 1) * TILE, (a.y + 2) * TILE + TILE / 2];
+          const p2: [number, number] = [(b2.x + 1) * TILE, (b2.y + 2) * TILE + TILE / 2];
+          const pm: [number, number] = [p2[0], p0[1]];
+          let len = Math.hypot(pm[0] - p0[0], pm[1] - p0[1]) + Math.hypot(p2[0] - pm[0], p2[1] - pm[1]);
+          this.trains.push({ path: [p0, pm, p2], dist: 0, dir: 1, pause: 0, len });
+        }
+      }
+      const pathPos = (path: [number, number][], d: number): [number, number, number] => {
+        for (let i = 0; i < path.length - 1; i++) {
+          const sl = Math.hypot(path[i + 1][0] - path[i][0], path[i + 1][1] - path[i][1]);
+          if (d <= sl || i === path.length - 2) {
+            const t2 = sl > 0 ? Math.min(1, d / sl) : 0;
+            return [lerp(path[i][0], path[i + 1][0], t2), lerp(path[i][1], path[i + 1][1], t2),
+              Math.atan2(path[i + 1][1] - path[i][1], path[i + 1][0] - path[i][0])];
+          }
+          d -= sl;
+        }
+        return [path[0][0], path[0][1], 0];
+      };
+      for (const tr of this.trains) {
+        if (tr.pause > 0) { tr.pause -= dt; }
+        else {
+          tr.dist += tr.dir * 95 * dt;
+          if (tr.dist >= tr.len) { tr.dist = tr.len; tr.dir = -1; tr.pause = 1.8; }
+          if (tr.dist <= 0) { tr.dist = 0; tr.dir = 1; tr.pause = 1.8; }
+        }
+        // lokomotiva + 2 vagóny
+        for (let car = 0; car < 3; car++) {
+          const d = Math.max(0, Math.min(tr.len, tr.dist - tr.dir * car * 15));
+          const [wx2, wy2, ang] = pathPos(tr.path, d);
+          const [sx2, sy2] = this.worldToScreen(wx2, wy2);
+          if (sx2 < -40 || sx2 > this.W + 40 || sy2 < -40 || sy2 > this.H + 40) continue;
+          x.save();
+          x.translate(sx2, sy2);
+          x.rotate(ang);
+          if (car === 0) {
+            x.fillStyle = '#2e5d3a'; x.fillRect(-8 * z, -5 * z, 16 * z, 9 * z);
+            x.fillStyle = '#1e3d28'; x.fillRect(4 * z, -8 * z, 4 * z, 4 * z); // komín
+            x.fillStyle = '#ffd74a'; x.fillRect(6.5 * z, -2 * z, 2 * z, 3 * z);
+          } else {
+            x.fillStyle = car === 1 ? '#7a5c3a' : '#6b5232';
+            x.fillRect(-7 * z, -4.5 * z, 14 * z, 8 * z);
+          }
+          x.fillStyle = '#26221c';
+          x.fillRect(-6 * z, 3.5 * z, 3 * z, 2 * z); x.fillRect(3 * z, 3.5 * z, 3 * z, 2 * z);
+          x.restore();
+          if (car === 0 && tr.pause <= 0 && g.s.settings.particles && Math.random() < 0.25) {
+            this.particles.push({ x: wx2, y: wy2 - 10, vx: -8, vy: -20, life: 1, max: 1.4, color: '#d8d8d890', size: 3 });
+          }
+        }
+      }
+    }
+
     // --- ptáci (ambientní život) ---
     this.birdTimer -= dt;
     if (this.birdTimer <= 0 && this.birds.length === 0) {
@@ -601,6 +723,34 @@ export class Renderer {
       x.fillText(f.text, sx, sy);
     }
     x.globalAlpha = 1;
+
+    // --- roční období: nádech scény + sníh / padající listí ---
+    const SEASON_TINT = ['', 'rgba(255,220,120,0.045)', 'rgba(205,125,40,0.08)', 'rgba(215,230,255,0.22)'];
+    if (SEASON_TINT[g.season]) {
+      x.fillStyle = SEASON_TINT[g.season];
+      x.fillRect(0, 0, this.W, this.H);
+    }
+    if (g.s.settings.particles) {
+      const want = g.season === 3 ? 70 : g.season === 2 ? 28 : 0;
+      while (this.precip.length < want) {
+        this.precip.push({ x: Math.random() * this.W, y: Math.random() * this.H, vy: 22 + Math.random() * 30, vx: (Math.random() - 0.5) * 14, ph: Math.random() * 6.28 });
+      }
+      if (this.precip.length > want) this.precip.length = want;
+      for (const f of this.precip) {
+        f.y += f.vy * dt; f.x += (f.vx + Math.sin(f.ph += dt * 2) * 8) * dt;
+        if (f.y > this.H + 5) { f.y = -5; f.x = Math.random() * this.W; }
+        if (f.x < -5) f.x = this.W + 5; else if (f.x > this.W + 5) f.x = -5;
+        if (g.season === 3) {
+          x.fillStyle = 'rgba(255,255,255,.8)';
+          x.beginPath(); x.arc(f.x, f.y, 1.6, 0, 7); x.fill();
+        } else {
+          x.fillStyle = ['#c87a30', '#b05a28', '#d8983a'][(f.ph * 10 | 0) % 3];
+          x.save(); x.translate(f.x, f.y); x.rotate(f.ph);
+          x.fillRect(-2, -1.2, 4, 2.4);
+          x.restore();
+        }
+      }
+    } else this.precip.length = 0;
 
     // --- noc ---
     if (night > 0.03) {

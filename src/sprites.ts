@@ -262,6 +262,33 @@ export function makeSprites() {
     x.fillStyle = '#ffd74a'; x.beginPath(); x.arc(24.5, 17, 1.8, 0, 7); x.fill();
   });
 
+  // ---- rybaření ----
+  sprites.fishHut = c(32, 44, x => {
+    box(x, 6, 24, 20, 14, '#8a7250');
+    roof(x, 6, 24, 20, 9, '#5d6e7a');
+    x.strokeStyle = '#4a3820'; x.lineWidth = 1.5;
+    x.beginPath(); x.moveTo(24, 20); x.lineTo(29, 14); x.stroke(); // prut
+    x.strokeStyle = '#c8d8e8'; x.lineWidth = 1;
+    x.beginPath(); x.moveTo(29, 14); x.lineTo(29, 22); x.stroke();
+    x.fillStyle = '#6fa8d8'; x.beginPath(); x.arc(29, 23, 1.5, 0, 7); x.fill();
+    x.fillStyle = '#4a3820'; x.fillRect(13, 31, 5, 7);
+  });
+  sprites.fishShoal = c(32, 40, x => {
+    x.strokeStyle = 'rgba(220,240,255,.5)'; x.lineWidth = 1.5;
+    x.beginPath(); x.arc(16, 28, 8, 0, 7); x.stroke();
+    x.beginPath(); x.arc(16, 28, 4.5, 0, 7); x.stroke();
+    x.fillStyle = '#9fc8e8';
+    // rybky
+    for (const [fx, fy, fl] of [[12, 26, 1], [19, 29, -1], [15, 31, 1]]) {
+      x.beginPath(); x.ellipse(fx, fy, 2.6, 1.2, 0, 0, 7); x.fill();
+      x.beginPath(); x.moveTo(fx + 2.6 * (fl as number), fy); x.lineTo(fx + 4 * (fl as number), fy - 1.4); x.lineTo(fx + 4 * (fl as number), fy + 1.4); x.fill();
+    }
+  });
+  sprites.fishEmpty = c(32, 40, x => {
+    x.strokeStyle = 'rgba(220,240,255,.25)'; x.lineWidth = 1.2;
+    x.beginPath(); x.arc(16, 28, 6, 0, 7); x.stroke();
+  });
+
   // ---- velké budovy (sloučené 4-v-1) ----
   const bigCustom: Record<string, (x: CanvasRenderingContext2D) => void> = {
     farm: x => { // velkostatek: lány, stodola, silo, plot

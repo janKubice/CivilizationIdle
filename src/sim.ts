@@ -5,7 +5,7 @@ import { clamp, lerp, bus, key, hash2 } from './util';
 import { B_WATER, B_MOUNTAIN } from './config';
 import {
   RES, B, BUILDINGS, TECHS, TECH_BY, UPGRADES, UPG_BY, ACHS, ACH_BONUS,
-  PERKS, PERK_BY, NODE_DEFS, ADJ_RULES, MERGEABLE, Rec,
+  PERKS, PERK_BY, NODE_DEFS, ADJ_RULES, MERGEABLE, SEASON_LEN, Rec,
 } from './data';
 import {
   Game, GameState, BuildingInst, baseMults, newState, initGame, recount, rebuildOccupancy, lvlEff,
@@ -102,7 +102,7 @@ export function computeAdj(g: Game, t: string, x: number, y: number, size: numbe
 function computeHaulDist(g: Game, b: { x: number; y: number }): number {
   let best = Math.max(Math.abs(b.x + 1), Math.abs(b.y + 1)); // náves na (-1,-1)
   for (const o of g.s.buildings) {
-    if (o.t !== 'storehouse') continue;
+    if (o.t !== 'storehouse' && o.t !== 'trainStation') continue; // nádraží = lokální překladiště
     const d = Math.max(Math.abs(b.x - o.x), Math.abs(b.y - o.y));
     if (d < best) best = d;
   }
@@ -120,6 +120,12 @@ function recomputeAllHaul(g: Game) {
 export function tick(g: Game, dt: number) {
   const s = g.s;
   s.playtime += dt * 1000;
+
+  // roční období (deterministicky z odehraného času)
+  const seasonTotal = (s.playtime / 1000) % (4 * SEASON_LEN);
+  const season = Math.floor(seasonTotal / SEASON_LEN) % 4;
+  if (season !== g.season) { g.season = season; bus.emit('season', { season }); }
+  g.seasonT = (seasonTotal % SEASON_LEN) / SEASON_LEN;
 
   // buffy
   const now = Date.now();
@@ -190,6 +196,9 @@ export function tick(g: Game, dt: number) {
     let mult = (m.job[def.id] || 1) * prodF * typeF(def.id);
     if (def.raw) mult *= m.gather * tMult;
     if (def.energyUse) mult *= throttle;
+    // roční období: léto přeje farmám, podzim sběru, zima farmy dusí
+    if (def.id === 'farm') mult *= [1, 1.2, 1, 0.6][g.season];
+    else if (def.id === 'gatherHut' || def.id === 'forestCamp') mult *= g.season === 2 ? 1.2 : 1;
 
     if (def.prod) {
       let rate = def.prod.rate;
@@ -213,11 +222,26 @@ export function tick(g: Game, dt: number) {
     }
   }
 
-  // --- spotřeba jídla, opotřebení nástrojů ---
+  // --- spotřeba jídla (ryby jsou záložní zdroj), opotřebení nástrojů ---
   const eat = s.pop * 0.08 * dt;
   const foodAvail = avail('food');
-  g.starving = foodAvail < eat;
-  add('food', -Math.min(eat, Math.max(0, foodAvail)));
+  if (foodAvail >= eat) {
+    add('food', -eat);
+    g.starving = false;
+  } else {
+    add('food', -Math.max(0, foodAvail));
+    const shortfall = eat - Math.max(0, foodAvail);
+    const fishAvail = avail('fish');
+    if (fishAvail >= shortfall) { add('fish', -shortfall); g.starving = false; }
+    else { add('fish', -Math.max(0, fishAvail)); g.starving = true; }
+  }
+  // zima: topení dřevem
+  if (g.season === 3) {
+    const heat = s.pop * 0.02 * dt;
+    const wAvail = avail('wood');
+    g.cold = wAvail < heat;
+    add('wood', -Math.min(heat, Math.max(0, wAvail)));
+  } else g.cold = false;
   const working = sumAssigned(s);
   if (working > 0 && (s.res.tools || 0) > 0) add('tools', -working * 0.0006 * dt);
 
@@ -231,10 +255,10 @@ export function tick(g: Game, dt: number) {
   }
   for (const r of Object.keys(g.rates)) if (!(r in delta)) g.rates[r] = lerp(g.rates[r], 0, 0.12);
 
-  // --- růst populace ---
+  // --- růst populace (jaro přeje) ---
   const housing = housingCap(g);
-  if (s.pop < housing && g.happiness > 0.55 && (s.res.food || 0) > 1) {
-    s.popFrac += 0.016 * Math.sqrt(s.pop + 1) * g.happiness * m.growth * dt;
+  if (s.pop < housing && g.happiness > 0.55 && ((s.res.food || 0) > 1 || (s.res.fish || 0) > 1)) {
+    s.popFrac += 0.016 * Math.sqrt(s.pop + 1) * g.happiness * m.growth * (g.season === 0 ? 1.3 : 1) * dt;
   } else if ((g.starving || g.happiness < 0.25) && s.pop > 3) {
     s.popFrac -= 0.012 * Math.sqrt(s.pop) * dt;
   }
@@ -268,6 +292,8 @@ function computeHappiness(g: Game, festHap: number) {
   }
   parts.push({ key: 'hap.services', v: services });
   parts.push({ key: 'hap.bonus', v: g.m.hapBonus });
+  if ((s.res.fish || 0) > 1 && (s.res.food || 0) > 1) parts.push({ key: 'hap.diet', v: 0.04 });
+  if (g.season === 3) parts.push(g.cold ? { key: 'hap.cold', v: -0.1 } : { key: 'hap.cozy', v: 0.03 });
   if (festHap > 0) parts.push({ key: 'hap.festival', v: festHap });
   g.hapParts = parts;
   g.happiness = clamp(parts.reduce((a, p) => a + p.v, 0), 0.05, 1);
@@ -527,10 +553,34 @@ function placeBuilding(g: Game, t: string, tx: number, ty: number, auto: boolean
   const adj = computeAdj(g, t, tx, ty, def.size);
   if (adj > 1.001) inst.adj = Math.round(adj * 100) / 100;
   if (t === 'storehouse') recomputeAllHaul(g);
-  if (t === 'trainStation') recomputeMults(g);
+  if (t === 'trainStation') { recomputeMults(g); recomputeAllHaul(g); layRails(g, inst); }
   autoConnectRoad(g, tx, ty);
   g.runtime.agentsDirty = true;
   if (!auto && adj > 1.001) bus.emit('adj', { t, mult: adj, label: ADJ_RULES[t]?.label || '' });
+}
+
+/** položí koleje k nejbližšímu jinému nádraží (L-trasa, vyhýbá se vodě a budovám) */
+function layRails(g: Game, st: BuildingInst) {
+  let best: BuildingInst | null = null, bd = Infinity;
+  for (const o of g.s.buildings) {
+    if (o === st || o.t !== 'trainStation') continue;
+    const d = Math.abs(o.x - st.x) + Math.abs(o.y - st.y);
+    if (d < bd) { bd = d; best = o; }
+  }
+  if (!best) return;
+  const put = (x: number, y: number) => {
+    const b = g.world.biomeAt(x, y);
+    if (b === B_WATER || b === B_MOUNTAIN) return;
+    if (g.world.occ.has(key(x, y))) return;
+    g.world.rails.add(key(x, y));
+  };
+  let cx = st.x + 1, cy = st.y + 2;
+  const tx2 = best.x + 1, ty2 = best.y + 2;
+  put(cx, cy);
+  while (cx !== tx2) { cx += Math.sign(tx2 - cx); put(cx, cy); }
+  while (cy !== ty2) { cy += Math.sign(ty2 - cy); put(cx, cy); }
+  g.s.rails = [...g.world.rails];
+  bus.emit('railsLaid', {});
 }
 
 // ---------- úrovně budov ----------
@@ -658,6 +708,13 @@ export function tryBuild(g: Game, t: string, tx: number, ty: number): string | n
   if (def.tech && !hasTech(g.s, def.tech)) return 'err.tech';
   for (let dy = 0; dy < def.size; dy++) for (let dx = 0; dx < def.size; dx++) {
     if (!g.world.buildable(tx + dx, ty + dy)) return 'err.terrain';
+  }
+  if (def.nearWater) {
+    let okW = false;
+    for (let dy = -2; dy < def.size + 2 && !okW; dy++) for (let dx = -2; dx < def.size + 2 && !okW; dx++) {
+      if (g.world.biomeAt(tx + dx, ty + dy) === B_WATER) okW = true;
+    }
+    if (!okW) return 'err.water';
   }
   const cost = buildCost(g, t);
   if (!canAfford(g, cost)) return 'err.res';

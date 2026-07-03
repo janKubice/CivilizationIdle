@@ -3,7 +3,7 @@
 
 import { CHUNK, B_WATER, B_SAND, B_GRASS, B_FOREST, B_HILLS, B_MOUNTAIN } from './config';
 import { fbm, hash2, clamp, lerp, key } from './util';
-import { NODE_DEFS, FORCED_NODES, N_TREE, N_BERRY, N_ROCK, N_COPPER, N_IRON, N_COAL } from './data';
+import { NODE_DEFS, FORCED_NODES, N_TREE, N_BERRY, N_ROCK, N_COPPER, N_IRON, N_COAL, N_FISH } from './data';
 
 export interface NodeInst {
   idx: number;          // index v chunk.nodes (klíč pro deltu)
@@ -30,13 +30,16 @@ export class World {
   occ = new Map<string, number>();
   /** cesty */
   roads = new Set<string>();
+  /** železniční koleje */
+  rails = new Set<string>();
   /** reference na delty ze save (mutujeme přímo) */
   nodeDelta: Record<string, Record<number, number>>;
 
-  constructor(seed: number, nodeDelta: Record<string, Record<number, number>>, roads: string[]) {
+  constructor(seed: number, nodeDelta: Record<string, Record<number, number>>, roads: string[], rails: string[] = []) {
     this.seed = seed;
     this.nodeDelta = nodeDelta;
     this.roads = new Set(roads);
+    this.rails = new Set(rails);
   }
 
   elevation(tx: number, ty: number): number {
@@ -92,7 +95,8 @@ export class World {
         else {
           const r = hash2(this.seed ^ 0x9e3779b9, tx, ty);
           const dist = Math.hypot(tx, ty);
-          if (b === B_FOREST && r < 0.26) kind = N_TREE;
+          if (b === B_WATER && r < 0.02) kind = N_FISH;
+          else if (b === B_FOREST && r < 0.26) kind = N_TREE;
           else if (b === B_GRASS) {
             if (r < 0.010) kind = N_BERRY;
             else if (r < 0.017) kind = N_ROCK;

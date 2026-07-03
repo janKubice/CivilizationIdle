@@ -26,6 +26,7 @@ export const RES: ResDef[] = [
   { id: 'tools', name: 'Nástroje', icon: '🛠️', baseCap: 80, value: 15, color: '#e8c46a' },
   { id: 'machinery', name: 'Stroje', icon: '⚙️', baseCap: 50, value: 60, color: '#9fb4d8' },
   { id: 'electronics', name: 'Elektronika', icon: '💾', baseCap: 40, value: 150, color: '#6fd8c8' },
+  { id: 'fish', name: 'Ryby', icon: '🐟', baseCap: 150, value: 2, color: '#6fa8d8' },
   { id: 'gold', name: 'Zlato', icon: '💰', baseCap: Infinity, value: 5, color: '#ffd777' },
   { id: 'research', name: 'Věda', icon: '🔬', baseCap: Infinity, value: 2, color: '#8fb8ff' },
 ];
@@ -49,6 +50,7 @@ export interface BDef {
   capBoost?: boolean;                     // skladiště
   tech?: string;                          // vyžadovaná technologie
   unbuildable?: boolean;                  // náves
+  nearWater?: boolean;                    // musí stát u vody (rybárna)
 }
 
 export const BUILDINGS: BDef[] = [
@@ -57,6 +59,7 @@ export const BUILDINGS: BDef[] = [
   { id: 'storehouse', name: 'Skladiště', icon: '📦', desc: '+75 % kapacity všech surovin. Zkracuje donášku okolním budovám.', era: 0, cat: 'city', cost: { wood: 40, stone: 15 }, size: 1, capBoost: true },
   { id: 'forestCamp', name: 'Dřevorubecký tábor', icon: '🪓', desc: 'Dřevorubci automaticky těží dřevo.', era: 0, cat: 'mine', cost: { wood: 20 }, size: 1, jobs: 2, jobName: 'Dřevorubci', prod: { res: 'wood', rate: 0.5 }, raw: true },
   { id: 'gatherHut', name: 'Sběračská chýše', icon: '🧺', desc: 'Sběrači shánějí jídlo v okolí.', era: 0, cat: 'food', cost: { wood: 15 }, size: 1, jobs: 2, jobName: 'Sběrači', prod: { res: 'food', rate: 0.45 }, raw: true },
+  { id: 'fishHut', name: 'Rybářská chata', icon: '🎣', desc: 'Musí stát u vody. Rybáři vyplouvají na loďkách za rybami — pestrá strava zvyšuje spokojenost a růst.', era: 0, cat: 'food', cost: { wood: 25 }, size: 1, jobs: 2, jobName: 'Rybáři', prod: { res: 'fish', rate: 0.5 }, raw: true, nearWater: true },
   { id: 'quarry', name: 'Lom', icon: '⛏️', desc: 'Kameníci lámou kámen.', era: 0, cat: 'mine', cost: { wood: 30 }, size: 1, jobs: 2, jobName: 'Kameníci', prod: { res: 'stone', rate: 0.3 }, raw: true },
   { id: 'library', name: 'Knihovna', icon: '📚', desc: 'Učenci generují vědu pro výzkum technologií.', era: 0, cat: 'other', cost: { wood: 30 }, size: 1, jobs: 2, jobName: 'Učenci', prod: { res: 'research', rate: 0.25 }, noHaul: true },
   { id: 'well', name: 'Studna', icon: '🪣', desc: 'Voda pro 40 obyvatel. Zvyšuje spokojenost.', era: 1, cat: 'city', cost: { stone: 20 }, size: 1, water: 40, hap: 0.02 },
@@ -219,8 +222,13 @@ export const NODE_DEFS: NodeDef[] = [
   { res: 'copperOre', max: 250, renew: 0, name: 'Měděná žíla' },
   { res: 'ironOre', max: 250, renew: 0, name: 'Železná žíla' },
   { res: 'coal', max: 300, renew: 0, name: 'Uhelná sloj' },
+  { res: 'fish', max: 50, renew: 0.06, name: 'Hejno ryb' },
 ];
-export const N_TREE = 0, N_BERRY = 1, N_ROCK = 2, N_COPPER = 3, N_IRON = 4, N_COAL = 5;
+export const N_TREE = 0, N_BERRY = 1, N_ROCK = 2, N_COPPER = 3, N_IRON = 4, N_COAL = 5, N_FISH = 6;
+
+// roční období: délka jednoho v sekundách herního času
+export const SEASON_LEN = 360;
+export const SEASON_ICONS = ['🌸', '☀️', '🍂', '❄️'];
 
 /** budovy, které jde sloučit 4-v-1 do "velké budovy" (2×2, +50 % výkon) */
 export const MERGEABLE = new Set(['farm', 'hut', 'house', 'forestCamp', 'gatherHut', 'quarry', 'sawmill', 'copperMine', 'ironMine', 'coalMine', 'library', 'market']);
@@ -233,6 +241,7 @@ export const ADJ_RULES: Record<string, AdjRule> = {
   gatherHut: { kinds: [1], per: 0.08, cap: 1.4, label: 'keře v okolí' },
   quarry: { kinds: [2], per: 0.08, cap: 1.5, label: 'balvany v okolí' },
   farm: { water: true, per: 0.08, cap: 1.4, label: 'voda v okolí' },
+  fishHut: { kinds: [6], per: 0.15, cap: 1.6, label: 'hejna ryb v okolí' },
   copperMine: { kinds: [3], per: 0.25, cap: 2, label: 'měděné žíly v okolí' },
   ironMine: { kinds: [4], per: 0.25, cap: 2, label: 'železné žíly v okolí' },
   coalMine: { kinds: [5], per: 0.25, cap: 2, label: 'uhelné sloje v okolí' },

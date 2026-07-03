@@ -1,7 +1,7 @@
 // ===== UI vrstva: HUD, panely, menu, modaly (vanilla DOM, čte stav, posílá příkazy) =====
 
 import { fmt, fmtRate, fmtTime, bus } from './util';
-import { RES, RES_BY, B, BUILDINGS, TECHS, TECH_BY, UPGRADES, ACHS, PERKS, BCat, Rec } from './data';
+import { RES, RES_BY, B, BUILDINGS, TECHS, TECH_BY, UPGRADES, ACHS, PERKS, SEASON_ICONS, BCat, Rec } from './data';
 import { Game, slots, sumAssigned, housingCap, waterCap, capOf } from './state';
 import {
   buildCost, canAfford, upgradeCost, buyTech, buyUpgrade, setAssign, hasTech, techAvailable,
@@ -546,7 +546,7 @@ function showSettings() {
 
 // ---------- top bar ----------
 const chipEls = new Map<string, { root: HTMLElement; amt: HTMLElement; rate: HTMLElement; bar: HTMLElement }>();
-let popChip: HTMLElement, hapChip: HTMLElement, waterChip: HTMLElement, energyChip: HTMLElement, eraChip: HTMLElement, buffWrap: HTMLElement;
+let popChip: HTMLElement, hapChip: HTMLElement, waterChip: HTMLElement, energyChip: HTMLElement, eraChip: HTMLElement, seasonChip: HTMLElement, buffWrap: HTMLElement;
 const ERA_ICONS = ['🪨', '🥉', '🏛️', '🏰', '🏭', '🏙️', '🚀'];
 const BUFF_KEY: Record<string, string> = { frenzy: 'buff.frenzy', clickFrenzy: 'buff.click', festival: 'buff.festival' };
 
@@ -600,6 +600,7 @@ function updateTopbar() {
   } else energyChip.style.display = 'none';
   eraChip.innerHTML = `${ERA_ICONS[g.maxEra]} <b>${tera(g.maxEra)}</b>`;
   eraChip.title = t('top.era');
+  seasonChip.innerHTML = `${SEASON_ICONS[g.season]} ${t('season.' + g.season)}`;
   buffWrap.innerHTML = '';
   const now = Date.now();
   for (const b of g.s.buffs) {
@@ -633,11 +634,11 @@ export function initUI(game: Game, opts: { renderer: Renderer; onNewGame: () => 
 
   topbar = el('div'); topbar.id = 'topbar'; ui.appendChild(topbar);
   buffWrap = el('span');
-  popChip = el('span', 'chip'); hapChip = el('span', 'chip'); waterChip = el('span', 'chip'); energyChip = el('span', 'chip'); eraChip = el('span', 'chip');
+  popChip = el('span', 'chip'); hapChip = el('span', 'chip'); waterChip = el('span', 'chip'); energyChip = el('span', 'chip'); eraChip = el('span', 'chip'); seasonChip = el('span', 'chip');
   energyChip.style.display = 'none'; waterChip.style.display = 'none';
   hapChip.style.cursor = 'pointer';
   hapChip.onclick = () => showHapBreakdown();
-  topbar.appendChild(popChip); topbar.appendChild(waterChip); topbar.appendChild(hapChip); topbar.appendChild(energyChip); topbar.appendChild(eraChip);
+  topbar.appendChild(popChip); topbar.appendChild(waterChip); topbar.appendChild(hapChip); topbar.appendChild(energyChip); topbar.appendChild(eraChip); topbar.appendChild(seasonChip);
   topbar.appendChild(buffWrap);
   topbar.appendChild(el('span', 'spacer'));
   const home = el('button', 'iconbtn', '🏠') as HTMLButtonElement;
@@ -715,6 +716,8 @@ export function initUI(game: Game, opts: { renderer: Renderer; onNewGame: () => 
   bus.on('upgraded', (e: any) => toast(t('toast.upgraded', esc(tn('b', e.t)), ROMAN[e.lvl - 1]), 'gold'));
   bus.on('mergeHint', (e: any) => toast(t('toast.mergeHint', esc(tn('b', e.t))), 'gold'));
   bus.on('district', () => toast(t('toast.district'), 'gold'));
+  bus.on('season', (e: any) => toast(`${SEASON_ICONS[e.season]} ${t('toast.season', t('season.' + e.season))}`));
+  bus.on('railsLaid', () => toast(t('toast.rails'), 'gold'));
   bus.on('storageFull', (e: any) => {
     const d = RES_BY[e.res];
     toast(t('toast.full', d?.icon || '', esc(tres(e.res))));

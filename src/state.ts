@@ -34,6 +34,7 @@ export interface GameState {
   assigned: Rec;                     // typ budovy -> počet pracovníků
   buildings: BuildingInst[];
   roads: string[];
+  rails: string[];
   nodeDelta: Record<string, Record<number, number>>;
   techs: string[];
   upgrades: Rec;                     // id -> level
@@ -73,6 +74,9 @@ export interface Game {
   bSlots: Rec;                       // pracovní místa dle typu (vč. velkých budov)
   housingSum: number; waterSum: number;
   maxEra: number;
+  season: number;                    // 0 jaro, 1 léto, 2 podzim, 3 zima
+  seasonT: number;                   // postup v období 0..1
+  cold: boolean;                     // zima bez dřeva na topení
   runtime: {
     golden: GoldenCitizen | null;
     buildSel: string | null;
@@ -111,6 +115,7 @@ export function newState(seed: number, carry?: { legacy: GameState['legacy']; ac
     assigned: {},
     buildings: [{ t: 'plaza', x: -1, y: -1 }],
     roads,
+    rails: [],
     nodeDelta: {},
     techs,
     upgrades: {},
@@ -152,7 +157,7 @@ export function rebuildOccupancy(g: Game) {
 /** naváže stav na Game objekt (zachovává identitu g) */
 export function initGame(g: Game, s: GameState) {
   g.s = s;
-  g.world = new World(s.seed, s.nodeDelta, s.roads);
+  g.world = new World(s.seed, s.nodeDelta, s.roads, s.rails);
   g.m = baseMults();
   g.rates = {};
   g.happiness = 0.6;
@@ -165,6 +170,7 @@ export function initGame(g: Game, s: GameState) {
   g.bSlots = {};
   g.housingSum = 0; g.waterSum = 0;
   g.maxEra = 0;
+  g.season = 0; g.seasonT = 0; g.cold = false;
   g.runtime = { golden: null, buildSel: null, paused: true, hint: '', agentsDirty: true, started: false };
   recount(g);
   rebuildOccupancy(g);
