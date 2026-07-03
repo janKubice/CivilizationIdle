@@ -5,7 +5,8 @@ import { RES, RES_BY, B, BUILDINGS, TECHS, TECH_BY, UPGRADES, ACHS, PERKS, BCat,
 import { Game, slots, sumAssigned, housingCap, waterCap, capOf } from './state';
 import {
   buildCost, canAfford, upgradeCost, buyTech, buyUpgrade, setAssign, hasTech, techAvailable,
-  ascendGain, ascensionUnlocked, civScore, perkCost, buyPerk, doAscend, demolish, haulEffOf, OfflineSummary,
+  ascendGain, ascensionUnlocked, civScore, perkCost, buyPerk, doAscend, demolish, haulEffOf,
+  upgradeCostB, upgradeEraOk, upgradeBuilding, findMergeGroup, mergeBuildings, splitBuilding, OfflineSummary,
 } from './sim';
 import { saveGame, exportSave, importSave, hardReset } from './save';
 import { t, tn, td, tres, tjob, tera, setLang, getLang, LANGS, Lang } from './i18n';
@@ -67,33 +68,70 @@ export function showOffline(sum: OfflineSummary) {
 }
 
 // ---------- info o budově ----------
+const ROMAN = ['I', 'II', 'III'];
+const costStr = (cost: Rec) => Object.entries(cost).map(([r, v]) => `${RES_BY[r]?.icon || ''}${fmt(v)}`).join(' ');
+
 export function showBuildingInfo(idx: number) {
   const inst = g.s.buildings[idx];
   if (!inst) return;
   const def = B[inst.t];
-  let body = `<h3>${def.icon} ${esc(tn('b', inst.t))}${inst.auto ? ` <span class="badge">${t('binfo.auto')}</span>` : ''}</h3>
+  const lvl = inst.lvl || 1;
+  let body = `<h3>${def.icon} ${esc(tn('b', inst.t))}${inst.big ? ' ★' : ''}${lvl > 1 ? ` <span class="badge">${ROMAN[lvl - 1]}</span>` : ''}${inst.auto ? ` <span class="badge">${t('binfo.auto')}</span>` : ''}</h3>
     <p>${esc(td('b', inst.t))}</p>`;
   const rows: string[] = [];
+  if (inst.big) rows.push(t('binfo.big'));
+  if (lvl > 1) rows.push(t('binfo.lvl', ROMAN[lvl - 1]));
   if (def.jobs) {
-    rows.push(t('binfo.workers', g.s.assigned[inst.t] || 0, slots(g, inst.t), def.jobs));
+    rows.push(t('binfo.workers', g.s.assigned[inst.t] || 0, slots(g, inst.t), def.jobs * (inst.big ? 4 : 1)));
     if (!def.noHaul) rows.push(t('binfo.haul', Math.round(haulEffOf(inst.d ?? 0, g.m.haulRange) * 100), inst.d ?? 0));
     if (inst.adj && inst.adj > 1) rows.push(t('binfo.adj', Math.round((inst.adj - 1) * 100)));
+    if (inst.dm && inst.dm > 1) rows.push(t('binfo.district', Math.round((inst.dm - 1) * 100)));
   }
-  if (def.housing) rows.push(t('binfo.housing', def.housing));
-  if (def.water) rows.push(t('binfo.water', def.water));
+  if (def.housing) rows.push(t('binfo.housing', def.housing * (inst.big ? 5 : 1) * (lvl === 3 ? 4 : lvl === 2 ? 2 : 1)));
+  if (def.water) rows.push(t('binfo.water', def.water * (lvl === 3 ? 4 : lvl === 2 ? 2 : 1)));
   if (def.hap) rows.push(t('binfo.hap', Math.round(def.hap * 100)));
   if (def.capBoost) rows.push(t('binfo.cap'));
   if (rows.length) body += `<p style="line-height:1.7">${rows.join('<br>')}</p>`;
 
-  const btns: { label: string; cls?: string; cb?: () => void }[] = [{ label: t('ok') }];
+  const btns: { label: string; cls?: string; cb?: () => void }[] = [];
+  // vylepšení úrovně
+  const ucost = upgradeCostB(g, idx);
+  if (ucost) {
+    const eraOk = upgradeEraOk(g, idx);
+    btns.push({
+      label: `⬆ ${t('binfo.lvlUp', ROMAN[lvl])} (${eraOk ? costStr(ucost) : t('err.era')})`,
+      cb: () => {
+        const err = upgradeBuilding(g, idx);
+        if (err) { toast('⚠️ ' + t(err)); bus.emit('error'); }
+      },
+    });
+  }
+  // sloučení / rozdělení
+  if (findMergeGroup(g, idx)) {
+    btns.push({
+      label: t('binfo.merge'), cb: () => {
+        const err = mergeBuildings(g, idx);
+        if (err) { toast('⚠️ ' + t(err)); bus.emit('error'); }
+      },
+    });
+  }
+  if (inst.big) {
+    btns.push({
+      label: t('binfo.split'), cb: () => {
+        const err = splitBuilding(g, idx);
+        if (err) { toast('⚠️ ' + t(err)); bus.emit('error'); }
+      },
+    });
+  }
   if (!def.unbuildable) {
-    btns.unshift({
+    btns.push({
       label: t('binfo.demolish'), cls: 'warn', cb: () => {
         const err = demolish(g, idx);
         if (err) { toast('⚠️ ' + t(err)); bus.emit('error'); }
       },
     });
   }
+  btns.push({ label: t('ok') });
   showModal(body, btns);
 }
 
@@ -670,6 +708,13 @@ export function initUI(game: Game, opts: { renderer: Renderer; onNewGame: () => 
     if (openedPanel === 'build' || openedPanel === 'work') refreshPanel();
   });
   bus.on('adj', (e: any) => toast(t('toast.adj', Math.round((e.mult - 1) * 100), esc(tn('b', e.t))), 'gold'));
+  bus.on('merged', (e: any) => {
+    toast(e.split ? t('toast.split', esc(tn('b', e.t))) : t('toast.merged', esc(tn('b', e.t))), 'gold');
+    if (openedPanel === 'build' || openedPanel === 'work') refreshPanel();
+  });
+  bus.on('upgraded', (e: any) => toast(t('toast.upgraded', esc(tn('b', e.t)), ROMAN[e.lvl - 1]), 'gold'));
+  bus.on('mergeHint', (e: any) => toast(t('toast.mergeHint', esc(tn('b', e.t))), 'gold'));
+  bus.on('district', () => toast(t('toast.district'), 'gold'));
   bus.on('storageFull', (e: any) => {
     const d = RES_BY[e.res];
     toast(t('toast.full', d?.icon || '', esc(tres(e.res))));

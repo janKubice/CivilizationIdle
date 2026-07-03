@@ -59,7 +59,10 @@ export const BUILDINGS: BDef[] = [
   { id: 'gatherHut', name: 'Sběračská chýše', icon: '🧺', desc: 'Sběrači shánějí jídlo v okolí.', era: 0, cat: 'food', cost: { wood: 15 }, size: 1, jobs: 2, jobName: 'Sběrači', prod: { res: 'food', rate: 0.45 }, raw: true },
   { id: 'quarry', name: 'Lom', icon: '⛏️', desc: 'Kameníci lámou kámen.', era: 0, cat: 'mine', cost: { wood: 30 }, size: 1, jobs: 2, jobName: 'Kameníci', prod: { res: 'stone', rate: 0.3 }, raw: true },
   { id: 'library', name: 'Knihovna', icon: '📚', desc: 'Učenci generují vědu pro výzkum technologií.', era: 0, cat: 'other', cost: { wood: 30 }, size: 1, jobs: 2, jobName: 'Učenci', prod: { res: 'research', rate: 0.25 }, noHaul: true },
-  { id: 'well', name: 'Studna', icon: '⛲', desc: 'Voda pro 40 obyvatel. Zvyšuje spokojenost.', era: 1, cat: 'city', cost: { stone: 20 }, size: 1, water: 40, hap: 0.02 },
+  { id: 'well', name: 'Studna', icon: '🪣', desc: 'Voda pro 40 obyvatel. Zvyšuje spokojenost.', era: 1, cat: 'city', cost: { stone: 20 }, size: 1, water: 40, hap: 0.02 },
+  { id: 'park', name: 'Park', icon: '🌳', desc: 'Zeleň mezi domy. Zvyšuje spokojenost, město je občas sází samo.', era: 1, cat: 'city', cost: { wood: 25, stone: 5 }, size: 1, hap: 0.03 },
+  { id: 'fountain', name: 'Fontána', icon: '⛲', desc: 'Ozdoba náměstí. Zvyšuje spokojenost.', era: 2, cat: 'city', cost: { stone: 60, gold: 30 }, size: 1, hap: 0.04, tech: 'masonry' },
+  { id: 'statue', name: 'Socha', icon: '🗽', desc: 'Pocta zakladatelům. Zvyšuje spokojenost.', era: 2, cat: 'city', cost: { stone: 100, gold: 80 }, size: 1, hap: 0.05, tech: 'theology' },
   { id: 'sawmill', name: 'Pila', icon: '🪚', desc: 'Řeže dřevo na prkna (2 dřevo → 1 prkno).', era: 1, cat: 'ind', cost: { wood: 50, stone: 15 }, size: 1, jobs: 2, jobName: 'Pilaři', recipe: { inputs: { wood: 1 }, outputs: { plank: 0.5 } }, tech: 'woodworking' },
   { id: 'farm', name: 'Farma', icon: '🌾', desc: 'Stabilní a vydatný zdroj jídla.', era: 1, cat: 'food', cost: { wood: 35, plank: 10 }, size: 1, jobs: 3, jobName: 'Farmáři', prod: { res: 'food', rate: 1.1 }, raw: true, tech: 'agriculture' },
   { id: 'copperMine', name: 'Měděný důl', icon: '⚒️', desc: 'Horníci těží měděnou rudu.', era: 1, cat: 'mine', cost: { wood: 40, plank: 10 }, size: 1, jobs: 2, jobName: 'Horníci (Cu)', prod: { res: 'copperOre', rate: 0.25 }, raw: true, tech: 'copperSmelting' },
@@ -218,6 +221,9 @@ export const NODE_DEFS: NodeDef[] = [
   { res: 'coal', max: 300, renew: 0, name: 'Uhelná sloj' },
 ];
 export const N_TREE = 0, N_BERRY = 1, N_ROCK = 2, N_COPPER = 3, N_IRON = 4, N_COAL = 5;
+
+/** budovy, které jde sloučit 4-v-1 do "velké budovy" (2×2, +50 % výkon) */
+export const MERGEABLE = new Set(['farm', 'hut', 'house', 'forestCamp', 'gatherHut', 'quarry', 'sawmill', 'copperMine', 'ironMine', 'coalMine', 'library', 'market']);
 
 // ---------- Adjacency synergie (bonus za umístění budovy u zdrojů) ----------
 export interface AdjRule { kinds?: number[]; water?: boolean; per: number; cap: number; label: string }

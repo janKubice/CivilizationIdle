@@ -9,7 +9,13 @@ export interface BuildingInst {
   auto?: 1;        // postaveno organickým růstem
   d?: number;      // vzdálenost k nejbližšímu skladu (cache)
   adj?: number;    // adjacency multiplikátor (cache, počítá se při stavbě)
+  lvl?: number;    // úroveň budovy (1 default, max 3): efektivita ×2/×4
+  big?: 1;         // "velká budova" — sloučená 4-v-1, zabírá 2×2, +50 % výkon
+  dm?: number;     // čtvrťový bonus (cache z recount)
 }
+
+/** efektivita podle úrovně budovy */
+export const lvlEff = (lvl?: number) => (lvl === 3 ? 4 : lvl === 2 ? 2 : 1);
 
 export interface Buff { kind: 'frenzy' | 'clickFrenzy' | 'festival'; mult: number; until: number; label: string; icon: string }
 
@@ -64,6 +70,8 @@ export interface Game {
   energy: { prod: number; use: number; throttle: number };
   capMult: number;
   bCount: Rec;                       // počet budov dle typu
+  bSlots: Rec;                       // pracovní místa dle typu (vč. velkých budov)
+  housingSum: number; waterSum: number;
   maxEra: number;
   runtime: {
     golden: GoldenCitizen | null;
@@ -129,9 +137,16 @@ export function baseMults(): Mults {
 
 const SIZES: Record<string, number> = Object.fromEntries(BUILDINGS.map(b => [b.id, b.size]));
 
-/** přestaví occupancy mapu po odstranění budovy */
+/** velikost instance budovy (velké 4-v-1 zabírají 2×2) */
+export const instSize = (b: BuildingInst) => (b.big ? 2 : SIZES[b.t] || 1);
+
+/** přestaví occupancy mapu (respektuje velké budovy) */
 export function rebuildOccupancy(g: Game) {
-  g.world.rebuildOcc(g.s.buildings, SIZES);
+  g.world.occ.clear();
+  g.s.buildings.forEach((b, i) => {
+    const sz = instSize(b);
+    for (let dy = 0; dy < sz; dy++) for (let dx = 0; dx < sz; dx++) g.world.occ.set(`${b.x + dx},${b.y + dy}`, i);
+  });
 }
 
 /** naváže stav na Game objekt (zachovává identitu g) */
@@ -147,26 +162,57 @@ export function initGame(g: Game, s: GameState) {
   g.energy = { prod: 0, use: 0, throttle: 1 };
   g.capMult = 1;
   g.bCount = {};
+  g.bSlots = {};
+  g.housingSum = 0; g.waterSum = 0;
   g.maxEra = 0;
   g.runtime = { golden: null, buildSel: null, paused: true, hint: '', agentsDirty: true, started: false };
   recount(g);
-  g.world.rebuildOcc(s.buildings, SIZES);
+  rebuildOccupancy(g);
 }
 
 export function recount(g: Game) {
   const c: Rec = {};
-  for (const b of g.s.buildings) c[b.t] = (c[b.t] || 0) + 1;
+  const sl: Rec = {};
+  let housing = 0, water = 0;
+  for (const b of g.s.buildings) {
+    c[b.t] = (c[b.t] || 0) + 1;
+    const def = B[b.t];
+    if (!def) continue;
+    const bigMult = b.big ? 4 : 1;
+    const le = lvlEff(b.lvl);
+    if (def.jobs) sl[b.t] = (sl[b.t] || 0) + def.jobs * bigMult;
+    if (def.housing) housing += def.housing * (b.big ? 5 : 1) * le;
+    if (def.water) water += def.water * (b.big ? 5 : 1) * le;
+  }
   g.bCount = c;
+  g.bSlots = sl;
+  g.housingSum = housing;
+  g.waterSum = water;
   let era = 0;
   for (const t of g.s.techs) { const d = TECH_BY[t]; if (d && d.era > era) era = d.era; }
   g.maxEra = era;
+  computeDistricts(g);
+}
+
+/** čtvrtě: ≥3 produkční budovy stejné kategorie v okruhu 4 → bonus (cache v inst.dm) */
+function computeDistricts(g: Game) {
+  const prod = g.s.buildings.filter(b => { const d = B[b.t]; return d && d.jobs && (d.prod || d.recipe); });
+  for (const b of prod) {
+    const cat = B[b.t].cat;
+    let near = b.big ? 3 : 0; // velká budova reprezentuje 4 budovy — čtvrť si drží sama
+    for (const o of prod) {
+      if (o === b || B[o.t].cat !== cat) continue;
+      if (Math.max(Math.abs(o.x - b.x), Math.abs(o.y - b.y)) <= 4) near += o.big ? 4 : 1;
+    }
+    const dm = near >= 5 ? 1.25 : near >= 2 ? 1.15 : undefined;
+    if (dm) b.dm = dm; else delete b.dm;
+  }
 }
 
 export function countB(g: Game, t: string): number { return g.bCount[t] || 0; }
 
 export function slots(g: Game, t: string): number {
-  const def = B[t];
-  return def?.jobs ? countB(g, t) * def.jobs : 0;
+  return g.bSlots[t] || 0;
 }
 
 export function activeWorkers(g: Game, t: string): number {
@@ -179,21 +225,11 @@ export function sumAssigned(s: GameState): number {
 }
 
 export function housingCap(g: Game): number {
-  let h = 0;
-  for (const [t, n] of Object.entries(g.bCount)) {
-    const def = B[t];
-    if (def?.housing) h += def.housing * n;
-  }
-  return Math.floor(h * g.m.housing);
+  return Math.floor(g.housingSum * g.m.housing);
 }
 
 export function waterCap(g: Game): number {
-  let w = 0;
-  for (const [t, n] of Object.entries(g.bCount)) {
-    const def = B[t];
-    if (def?.water) w += def.water * n;
-  }
-  return w;
+  return g.waterSum;
 }
 
 export function capOf(g: Game, res: string): number {

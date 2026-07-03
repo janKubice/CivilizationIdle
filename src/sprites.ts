@@ -238,6 +238,62 @@ export function makeSprites() {
     x.beginPath(); x.moveTo(24, 66); x.lineTo(29, 16); x.lineTo(35, 16); x.lineTo(40, 66); x.closePath(); x.fill();
     x.fillStyle = '#ffd777'; x.beginPath(); x.moveTo(29, 16); x.lineTo(32, 6); x.lineTo(35, 16); x.closePath(); x.fill();
   });
+  // ---- parky a dekorace ----
+  sprites.park = c(32, 44, x => {
+    x.fillStyle = '#4a8040'; x.fillRect(3, 26, 26, 12);
+    x.fillStyle = '#5b4327'; x.fillRect(13, 29, 3, 7);
+    x.fillStyle = '#3f7a38'; x.beginPath(); x.arc(14, 23, 7, 0, 7); x.fill();
+    x.fillStyle = '#8a6b42'; x.fillRect(21, 32, 8, 2); x.fillRect(21, 34, 2, 3); x.fillRect(27, 34, 2, 3);
+    x.fillStyle = '#d84a8a'; x.fillRect(6, 33, 2, 2);
+    x.fillStyle = '#e8d84a'; x.fillRect(9, 35, 2, 2);
+  });
+  sprites.fountain = c(32, 44, x => {
+    x.fillStyle = '#9aa0a8'; x.beginPath(); x.arc(16, 32, 9, 0, 7); x.fill();
+    x.fillStyle = '#3d78b8'; x.beginPath(); x.arc(16, 32, 6.5, 0, 7); x.fill();
+    x.fillStyle = '#9aa0a8'; x.fillRect(14.5, 22, 3, 10);
+    x.fillStyle = '#8fc8f0'; x.beginPath(); x.arc(16, 22, 2.5, 0, 7); x.fill();
+    x.fillStyle = 'rgba(200,232,255,.55)'; x.fillRect(12, 24, 1.5, 6); x.fillRect(18.5, 24, 1.5, 6);
+  });
+  sprites.statue = c(32, 44, x => {
+    x.fillStyle = '#8d939c'; x.fillRect(10, 32, 12, 6);
+    x.fillStyle = '#aab0b8'; x.fillRect(12.5, 20, 7, 12);
+    x.fillStyle = '#c8ced8'; x.beginPath(); x.arc(16, 17, 3.5, 0, 7); x.fill();
+    x.fillRect(19, 18, 5, 2);
+    x.fillStyle = '#ffd74a'; x.beginPath(); x.arc(24.5, 17, 1.8, 0, 7); x.fill();
+  });
+
+  // ---- velké budovy (sloučené 4-v-1) ----
+  const bigCustom: Record<string, (x: CanvasRenderingContext2D) => void> = {
+    farm: x => { // velkostatek: lány, stodola, silo, plot
+      x.fillStyle = '#7a6234'; x.fillRect(2, 30, 60, 46);
+      x.fillStyle = '#c9a83e';
+      for (let i = 0; i < 9; i++) x.fillRect(4, 33 + i * 4.8, 56, 2.4);
+      box(x, 38, 14, 22, 18, '#a04836');
+      roof(x, 38, 14, 22, 8, '#7a3428');
+      x.fillStyle = '#c8ced8'; x.fillRect(28, 14, 8, 18);
+      x.fillStyle = '#8d939c'; x.beginPath(); x.arc(32, 14, 4, Math.PI, 0); x.fill();
+      x.fillStyle = '#8a6b42'; for (let i = 0; i < 15; i++) x.fillRect(2 + i * 4.2, 74, 2, 4);
+    },
+    hut: x => { // dvůr: tři chatrče kolem dvorku s ohništěm
+      x.fillStyle = '#b09a72'; x.fillRect(6, 42, 52, 32);
+      x.drawImage(sprites.hut, 2, 6, 28, 38);
+      x.drawImage(sprites.hut, 34, 6, 28, 38);
+      x.drawImage(sprites.hut, 18, 34, 28, 38);
+      x.fillStyle = '#e88a2a'; x.beginPath(); x.arc(32, 64, 3, 0, 7); x.fill();
+    },
+  };
+  for (const t of ['farm', 'hut', 'house', 'forestCamp', 'gatherHut', 'quarry', 'sawmill', 'copperMine', 'ironMine', 'coalMine', 'library', 'market']) {
+    sprites['big:' + t] = c(64, 80, x => {
+      if (bigCustom[t]) { bigCustom[t](x); return; }
+      // generická velká budova: podesta + zvětšený model + prapor
+      x.fillStyle = '#9a917a'; x.fillRect(2, 68, 60, 10);
+      x.strokeStyle = '#00000030'; x.strokeRect(2.5, 68.5, 59, 9);
+      x.drawImage(sprites[t], 8, 6, 48, 66);
+      x.strokeStyle = '#5a4a35'; x.lineWidth = 2;
+      x.beginPath(); x.moveTo(57, 30); x.lineTo(57, 10); x.stroke();
+      x.fillStyle = '#d29922'; x.beginPath(); x.moveTo(57, 10); x.lineTo(64, 13.5); x.lineTo(57, 17); x.fill();
+    });
+  }
 }
 
 /** noční okna – souřadnice per budova (px v spritu) */

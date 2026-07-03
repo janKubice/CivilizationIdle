@@ -5,10 +5,10 @@ import { clamp, lerp, bus, key, hash2 } from './util';
 import { B_WATER, B_MOUNTAIN } from './config';
 import {
   RES, B, BUILDINGS, TECHS, TECH_BY, UPGRADES, UPG_BY, ACHS, ACH_BONUS,
-  PERKS, PERK_BY, NODE_DEFS, ADJ_RULES, Rec,
+  PERKS, PERK_BY, NODE_DEFS, ADJ_RULES, MERGEABLE, Rec,
 } from './data';
 import {
-  Game, GameState, baseMults, newState, initGame, recount, rebuildOccupancy,
+  Game, GameState, BuildingInst, baseMults, newState, initGame, recount, rebuildOccupancy, lvlEff,
   countB, slots, activeWorkers, sumAssigned, housingCap, waterCap, capOf,
 } from './state';
 import { NodeInst } from './worldgen';
@@ -147,14 +147,15 @@ export function tick(g: Game, dt: number) {
   computeHappiness(g, festHap);
   const prodF = (0.5 + 0.5 * g.happiness) * frenzy * m.global;
 
-  // per-typ faktor: doprava × adjacency (jeden průchod přes budovy)
+  // per-typ faktor: doprava × adjacency × úroveň × velká budova × čtvrť (jeden průchod)
   const tf: Record<string, { s: number; n: number }> = {};
   for (const b of s.buildings) {
     const bd = B[b.t];
-    if (!bd?.jobs || bd.noHaul) continue;
-    const f = haulEffOf(b.d ?? 0, m.haulRange) * (b.adj || 1);
+    if (!bd?.jobs) continue;
+    const haul = bd.noHaul ? 1 : haulEffOf(b.d ?? 0, m.haulRange);
+    const f = haul * (b.adj || 1) * lvlEff(b.lvl) * (b.big ? 1.5 : 1) * (b.dm || 1);
     const e = tf[b.t] || (tf[b.t] = { s: 0, n: 0 });
-    e.s += f; e.n++;
+    e.s += f * (b.big ? 4 : 1); e.n += b.big ? 4 : 1; // velká váží za 4 budovy
   }
   const typeF = (t: string) => { const e = tf[t]; return e && e.n ? e.s / e.n : 1; };
 
@@ -171,7 +172,7 @@ export function tick(g: Game, dt: number) {
         ratio = want > 0 ? clamp(avail(def.fuel.res) / want, 0, 1) : 1;
         add(def.fuel.res, -want * ratio);
       }
-      eProd = n * (def.energyOut || 0) * (fusion ? 10 : 1) * ratio;
+      eProd = n * (def.energyOut || 0) * (fusion ? 10 : 1) * ratio * typeF('powerPlant');
     }
   }
   let eUse = 0;
@@ -186,9 +187,8 @@ export function tick(g: Game, dt: number) {
     const n = activeWorkers(g, def.id);
     if (!n) continue;
 
-    let mult = (m.job[def.id] || 1) * prodF;
+    let mult = (m.job[def.id] || 1) * prodF * typeF(def.id);
     if (def.raw) mult *= m.gather * tMult;
-    if (!def.noHaul) mult *= typeF(def.id);
     if (def.energyUse) mult *= throttle;
 
     if (def.prod) {
@@ -384,6 +384,19 @@ function organicGrowth(g: Game, rand: () => number) {
       }
     }
   }
+  // město se okrašluje samo: park, když spokojenost klesá
+  if (g.happiness < 0.62 && (g.bCount.park || 0) < 6 && rand() < 0.3) {
+    const cost = buildCost(g, 'park');
+    if (canAfford(g, cost)) {
+      const spot = findAutoSpot(g, rand);
+      if (spot) {
+        pay(g, cost);
+        placeBuilding(g, 'park', spot[0], spot[1], true);
+        bus.emit('built', { t: 'park', x: spot[0], y: spot[1], auto: true });
+        return;
+      }
+    }
+  }
   // občas protáhni cestu — město "dýchá" do krajiny
   if (rand() < 0.35) extendRoad(g, rand);
 }
@@ -520,6 +533,100 @@ function placeBuilding(g: Game, t: string, tx: number, ty: number, auto: boolean
   if (!auto && adj > 1.001) bus.emit('adj', { t, mult: adj, label: ADJ_RULES[t]?.label || '' });
 }
 
+// ---------- úrovně budov ----------
+export function upgradeCostB(g: Game, idx: number): Rec | null {
+  const inst = g.s.buildings[idx];
+  if (!inst) return null;
+  const def = B[inst.t];
+  const lvl = inst.lvl || 1;
+  if (lvl >= 3 || def.unbuildable || (!def.jobs && !def.housing && !def.water)) return null;
+  const out: Rec = {};
+  for (const [r, v] of Object.entries(def.cost)) out[r] = Math.floor(v * 4 * lvl * (inst.big ? 4 : 1));
+  return Object.keys(out).length ? out : null;
+}
+
+export function upgradeEraOk(g: Game, idx: number): boolean {
+  const inst = g.s.buildings[idx];
+  if (!inst) return false;
+  return g.maxEra >= B[inst.t].era + (inst.lvl || 1);
+}
+
+export function upgradeBuilding(g: Game, idx: number): string | null {
+  const inst = g.s.buildings[idx];
+  if (!inst) return 'err.req';
+  const cost = upgradeCostB(g, idx);
+  if (!cost) return 'err.max';
+  if (!upgradeEraOk(g, idx)) return 'err.era';
+  if (!canAfford(g, cost)) return 'err.res';
+  pay(g, cost);
+  inst.lvl = (inst.lvl || 1) + 1;
+  recount(g);
+  g.runtime.agentsDirty = true;
+  bus.emit('upgraded', { t: inst.t, lvl: inst.lvl, x: inst.x, y: inst.y });
+  return null;
+}
+
+// ---------- slučování 4-v-1 ----------
+/** najdi 2×2 čtverec stejného typu obsahující budovu idx (TL,TR,BL,BR indexy) */
+export function findMergeGroup(g: Game, idx: number): number[] | null {
+  const inst = g.s.buildings[idx];
+  if (!inst || inst.big || !MERGEABLE.has(inst.t)) return null;
+  const at = (x: number, y: number): number =>
+    g.s.buildings.findIndex(b => b.t === inst.t && !b.big && b.x === x && b.y === y);
+  for (const [ox, oy] of [[0, 0], [-1, 0], [0, -1], [-1, -1]]) {
+    const tlx = inst.x + ox, tly = inst.y + oy;
+    const ids = [at(tlx, tly), at(tlx + 1, tly), at(tlx, tly + 1), at(tlx + 1, tly + 1)];
+    if (ids.every(i => i >= 0)) return ids;
+  }
+  return null;
+}
+
+export function mergeBuildings(g: Game, idx: number): string | null {
+  const group = findMergeGroup(g, idx);
+  if (!group) return 'err.merge';
+  const insts = group.map(i => g.s.buildings[i]);
+  const tlx = Math.min(...insts.map(b => b.x)), tly = Math.min(...insts.map(b => b.y));
+  const t = insts[0].t;
+  const lvl = Math.min(...insts.map(b => b.lvl || 1));
+  const anyAuto = insts.some(b => b.auto);
+  [...group].sort((a, b) => b - a).forEach(i => g.s.buildings.splice(i, 1));
+  const merged: BuildingInst = { t, x: tlx, y: tly, big: 1 };
+  if (lvl > 1) merged.lvl = lvl;
+  if (anyAuto) merged.auto = 1;
+  g.s.buildings.push(merged);
+  rebuildOccupancy(g);
+  recount(g);
+  const def = B[t];
+  if (def.jobs && !def.noHaul) merged.d = computeHaulDist(g, merged);
+  const adj = computeAdj(g, t, tlx, tly, 2);
+  if (adj > 1.001) merged.adj = Math.round(adj * 100) / 100;
+  g.runtime.agentsDirty = true;
+  bus.emit('merged', { t });
+  return null;
+}
+
+export function splitBuilding(g: Game, idx: number): string | null {
+  const inst = g.s.buildings[idx];
+  if (!inst || !inst.big) return 'err.req';
+  const { t, x, y, lvl, auto } = inst;
+  const def = B[t];
+  g.s.buildings.splice(idx, 1);
+  for (const [dx, dy] of [[0, 0], [1, 0], [0, 1], [1, 1]]) {
+    const nb: BuildingInst = { t, x: x + dx, y: y + dy };
+    if (lvl && lvl > 1) nb.lvl = lvl;
+    if (auto) nb.auto = 1;
+    g.s.buildings.push(nb);
+    if (def.jobs && !def.noHaul) nb.d = computeHaulDist(g, nb);
+    const adj = computeAdj(g, t, nb.x, nb.y, 1);
+    if (adj > 1.001) nb.adj = Math.round(adj * 100) / 100;
+  }
+  rebuildOccupancy(g);
+  recount(g);
+  g.runtime.agentsDirty = true;
+  bus.emit('merged', { t, split: true });
+  return null;
+}
+
 /** zboření budovy s 50% refundací */
 export function demolish(g: Game, idx: number): string | null {
   const s = g.s;
@@ -529,7 +636,8 @@ export function demolish(g: Game, idx: number): string | null {
   if (def.unbuildable) return 'err.terrain';
   const n = Math.max(0, countB(g, inst.t) - 1);
   const refund: Rec = {};
-  for (const [r, v] of Object.entries(def.cost)) refund[r] = Math.floor(v * Math.pow(1.12, n) * 0.5);
+  const bigMult = inst.big ? 4 : 1;
+  for (const [r, v] of Object.entries(def.cost)) refund[r] = Math.floor(v * Math.pow(1.12, n) * 0.5 * bigMult);
   s.buildings.splice(idx, 1);
   rebuildOccupancy(g);
   recount(g);
@@ -556,8 +664,28 @@ export function tryBuild(g: Game, t: string, tx: number, ty: number): string | n
   pay(g, cost);
   placeBuilding(g, t, tx, ty, false);
   bus.emit('built', { t, x: tx, y: ty });
+  const gi = g.s.buildings.length - 1;
+  const inst = g.s.buildings[gi];
+  // hint na slučování (throttled per typ)
+  if (findMergeGroup(g, gi) && (mergeHintAt[t] || 0) + 120000 < Date.now()) {
+    mergeHintAt[t] = Date.now();
+    bus.emit('mergeHint', { t });
+  }
+  // oznám vznik nové čtvrti (přesně 3 členové = právě vznikla)
+  if (inst.dm) {
+    const def2 = B[t];
+    let members = 1;
+    for (const o of g.s.buildings) {
+      if (o === inst) continue;
+      const od = B[o.t];
+      if (od.cat === def2.cat && od.jobs && (od.prod || od.recipe) &&
+        Math.max(Math.abs(o.x - inst.x), Math.abs(o.y - inst.y)) <= 4) members++;
+    }
+    if (members === 3) bus.emit('district', { cat: def2.cat });
+  }
   return null;
 }
+const mergeHintAt: Rec = {};
 
 export function setAssign(g: Game, t: string, n: number) {
   const s = g.s;

@@ -15,11 +15,13 @@ interface Agent {
   x: number; y: number;    // world px
   path: [number, number][];// body cesty (world px)
   seg: number; t: number;  // segment + progres
-  state: 'walk' | 'work' | 'back' | 'idle';
+  state: 'walk' | 'work' | 'back' | 'idle' | 'loop';
   timer: number;
   color: string; carry: string | null;
   speed: number; variant: number;
+  kind?: 'horse' | 'tractor';   // vozidla/zvířata na velkostatcích
 }
+interface Bird { x: number; y: number; vx: number; ph: number }
 interface Heli { x: number; y: number; tx: number; ty: number; rot: number }
 
 const AGENT_COLORS: Record<string, string> = {
@@ -45,6 +47,8 @@ export class Renderer {
   /** perzistentní agenti s identitou — brání "teleportům" při re-syncu */
   private agentMap = new Map<string, Agent>();
   private helis: Heli[] = [];
+  private birds: Bird[] = [];
+  private birdTimer = 8;
   private agentSync = 0;
   private mini: HTMLCanvasElement | null = null;
   private miniTimer = 0;
@@ -69,6 +73,7 @@ export class Renderer {
       // agenti zůstávají — sync jen přidá nové (indexy budov se stavbou nemění)
     });
     bus.on('demolished', () => { this.agentMap.clear(); }); // indexy budov se posunuly
+    bus.on('merged', () => { this.agentMap.clear(); });
     bus.on('festival', () => {
       for (let i = 0; i < 40; i++) this.burst(Math.random() * 200 - 100, Math.random() * 200 - 100, ['#d84848', '#ffd777', '#4a8040', '#8fb8ff'][i % 4], 2);
     });
@@ -162,6 +167,28 @@ export class Renderer {
         if (!this.agentMap.has(k)) this.agentMap.set(k, this.makeAgent(g, i, a));
       }
     }
+    // koně / traktory na velkostatcích (velké farmy)
+    const tractor = hasTech(g.s, 'heavyMachinery');
+    for (let i = 0; i < g.s.buildings.length && budget > 0; i++) {
+      const b = g.s.buildings[i];
+      if (!b.big || b.t !== 'farm') continue;
+      const wx = b.x * TILE, wy = b.y * TILE;
+      if (wx < view[0] || wx > view[2] || wy < view[1] || wy > view[3]) continue;
+      const k = `v:${i}`;
+      wanted.add(k); budget--;
+      if (!this.agentMap.has(k)) {
+        const pad = 6;
+        const p: [number, number][] = [
+          [wx - pad, wy - pad], [wx + 2 * TILE + pad, wy - pad],
+          [wx + 2 * TILE + pad, wy + 2 * TILE + pad], [wx - pad, wy + 2 * TILE + pad],
+        ];
+        this.agentMap.set(k, {
+          bIdx: i, x: p[0][0], y: p[0][1], path: p, seg: 0, t: Math.random(),
+          state: 'loop', timer: 0, color: '#8a5a2a', carry: null,
+          speed: tractor ? 46 : 26, variant: 0, kind: tractor ? 'tractor' : 'horse',
+        });
+      }
+    }
     // zahaleči kolem návsi
     const idle = Math.min(8, g.s.pop - Object.values(g.s.assigned).reduce((a, v) => a + v, 0));
     for (let i = 0; i < idle && budget > 0; i++, budget--) {
@@ -216,6 +243,16 @@ export class Renderer {
 
   private updateAgents(g: Game, dt: number) {
     for (const a of this.agentMap.values()) {
+      if (a.state === 'loop') {
+        // vozidla objíždějí dokola (kůň s pluhem / traktor)
+        const p0 = a.path[a.seg % a.path.length];
+        const p1 = a.path[(a.seg + 1) % a.path.length];
+        const segLen = Math.hypot(p1[0] - p0[0], p1[1] - p0[1]) || 1;
+        a.t += (a.speed * dt) / segLen;
+        if (a.t >= 1) { a.seg = (a.seg + 1) % a.path.length; a.t = 0; }
+        else { a.x = lerp(p0[0], p1[0], a.t); a.y = lerp(p0[1], p1[1], a.t); }
+        continue;
+      }
       if (a.state === 'work') {
         a.timer -= dt;
         if (a.timer <= 0) { a.state = 'walk'; a.seg = 0; a.t = 0; a.carry = a.bIdx >= 0 ? (B[g.s.buildings[a.bIdx]?.t]?.prod?.res ?? 'wood') : null; }
@@ -326,11 +363,24 @@ export class Renderer {
     visB.sort((p, q) => p.b.y - q.b.y);
     for (const { b } of visB) {
       const def = B[b.t];
-      const sp = sprites[b.t];
+      const size = b.big ? 2 : def.size;
+      const sp = (b.big && sprites['big:' + b.t]) || sprites[b.t];
       if (!sp) continue;
-      const sh = def.size === 2 ? 80 : 44;
-      const [sx, sy] = this.worldToScreen(b.x * TILE, b.y * TILE - (sh - def.size * TILE));
-      x.drawImage(sp, sx, sy, def.size * TILE * z, sh * z);
+      const sh = size === 2 ? 80 : 44;
+      const [sx, sy] = this.worldToScreen(b.x * TILE, b.y * TILE - (sh - size * TILE));
+      x.drawImage(sp, sx, sy, size * TILE * z, sh * z);
+      // pipsy úrovně (zlaté kosočtverce nad budovou)
+      if (b.lvl && b.lvl > 1) {
+        x.fillStyle = '#ffd74a';
+        for (let p = 0; p < b.lvl - 1; p++) {
+          const px0 = sx + (size * TILE * z) / 2 + (p - (b.lvl - 2) / 2) * 8 * z;
+          const py0 = sy - 3 * z;
+          x.beginPath();
+          x.moveTo(px0, py0 - 3.5 * z); x.lineTo(px0 + 3 * z, py0);
+          x.lineTo(px0, py0 + 3.5 * z); x.lineTo(px0 - 3 * z, py0);
+          x.fill();
+        }
+      }
       // noční okna
       if (night > 0.45) {
         const wins = NIGHT_WINDOWS[b.t];
@@ -391,6 +441,33 @@ export class Renderer {
       const [sx, sy] = this.worldToScreen(a.x, a.y);
       if (sx < -20 || sx > this.W + 20 || sy < -20 || sy > this.H + 20) continue;
       const s = z;
+      // vozidla/zvířata na velkostatcích
+      if (a.kind === 'horse') {
+        x.fillStyle = '#00000030'; x.beginPath(); x.ellipse(sx, sy + 2 * s, 6 * s, 2 * s, 0, 0, 7); x.fill();
+        x.fillStyle = '#7a4a22';
+        x.fillRect(sx - 5 * s, sy - 6 * s, 10 * s, 4.5 * s);            // tělo
+        x.fillRect(sx + 4 * s, sy - 9 * s, 3 * s, 4 * s);              // hlava+krk
+        x.fillRect(sx - 4.5 * s, sy - 2 * s, 1.6 * s, 3 * s);          // nohy
+        x.fillRect(sx + 3 * s, sy - 2 * s, 1.6 * s, 3 * s);
+        x.fillStyle = '#4a2e14'; x.fillRect(sx - 6.5 * s, sy - 5.5 * s, 1.8 * s, 3 * s); // ocas
+        // pluh za koněm
+        x.strokeStyle = '#8a6b42'; x.lineWidth = 1.5 * s;
+        x.beginPath(); x.moveTo(sx - 6 * s, sy - 3 * s); x.lineTo(sx - 10 * s, sy); x.stroke();
+        continue;
+      }
+      if (a.kind === 'tractor') {
+        x.fillStyle = '#00000030'; x.beginPath(); x.ellipse(sx, sy + 2 * s, 7 * s, 2.2 * s, 0, 0, 7); x.fill();
+        x.fillStyle = '#c8352a';
+        x.fillRect(sx - 6 * s, sy - 7 * s, 12 * s, 5 * s);             // kapota
+        x.fillRect(sx - 1 * s, sy - 11 * s, 6 * s, 4.5 * s);           // kabina
+        x.fillStyle = '#9fd8e8'; x.fillRect(sx + 0.2 * s, sy - 10 * s, 3.5 * s, 3 * s);
+        x.fillStyle = '#26221c';
+        x.beginPath(); x.arc(sx + 4 * s, sy - 1 * s, 3.4 * s, 0, 7); x.fill();   // velké kolo
+        x.beginPath(); x.arc(sx - 4.5 * s, sy - 0.5 * s, 2.2 * s, 0, 7); x.fill(); // malé kolo
+        if (this.g.s.settings.particles && Math.random() < 0.12)
+          this.particles.push({ x: a.x - 6, y: a.y - 12, vx: -6, vy: -14, life: 1, max: 1.1, color: '#a8a8a880', size: 2.5 });
+        continue;
+      }
       const bob = a.state === 'work' ? Math.sin(now / 90) * 1.5 * s : 0;
       // stín
       x.fillStyle = '#00000030'; x.beginPath(); x.ellipse(sx, sy + 1 * s, 4 * s, 1.6 * s, 0, 0, 7); x.fill();
@@ -453,6 +530,30 @@ export class Renderer {
         x.lineTo(ex + Math.cos(ang - 2.6) * 16, ey + Math.sin(ang - 2.6) * 16);
         x.closePath(); x.fill();
       }
+    }
+
+    // --- ptáci (ambientní život) ---
+    this.birdTimer -= dt;
+    if (this.birdTimer <= 0 && this.birds.length === 0) {
+      this.birdTimer = 12 + Math.random() * 16;
+      const fromLeft = Math.random() < 0.5;
+      const by = vy0 + Math.random() * (vy1 - vy0);
+      const vx = (fromLeft ? 1 : -1) * (80 + Math.random() * 40);
+      for (let i = 0; i < 3; i++) {
+        this.birds.push({ x: (fromLeft ? vx0 - 30 : vx1 + 30) - i * 14 * Math.sign(vx), y: by + i * 9, vx, ph: Math.random() * 6.28 });
+      }
+    }
+    x.strokeStyle = '#2a2f38'; x.lineWidth = Math.max(1, 1.3 * z);
+    for (let i = this.birds.length - 1; i >= 0; i--) {
+      const bd = this.birds[i];
+      bd.x += bd.vx * dt; bd.ph += dt * 9;
+      bd.y += Math.sin(bd.ph * 0.35) * 6 * dt;
+      if (bd.x < vx0 - 100 || bd.x > vx1 + 100) { this.birds.splice(i, 1); continue; }
+      const [bsx, bsy] = this.worldToScreen(bd.x, bd.y);
+      const w = 4 * z, flap = Math.sin(bd.ph) * 2.4 * z;
+      x.beginPath();
+      x.moveTo(bsx - w, bsy - flap); x.quadraticCurveTo(bsx, bsy + 1.6 * z, bsx + w, bsy - flap);
+      x.stroke();
     }
 
     // --- vrtulníky ---
