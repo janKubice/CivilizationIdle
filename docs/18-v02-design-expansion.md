@@ -262,3 +262,22 @@ Vesmírný program a terraforming jako velké finále éry Budoucnosti (zbývaj�
 - `World.terra` (Set), aplikace v `generate()` i za běhu přes `World.terraform(tx,ty)`; render zneplatní chunk cache přes event `terraform`.
 - `terraformTick`/`skyLaserTick` v `slowTick`. Rakety a laserové paprsky jsou render-entity (`rockets`, `laserStrikes`).
 - Achievementy: Vzhůru ke hvězdám (Kosmodrom), Zahradník planet (100 dlaždic), Z oběžné dráhy (orbitální lasery). Překlady CZ/EN/DE/FR.
+
+---
+
+## Addendum 4 — v0.7 „Obrana a armáda" (implementováno)
+
+Poslední velká položka z prvního feedbacku: nepřátelé / armáda. Přidává vrstvu napětí, aniž by rozbila poklidnou idle smyčku.
+
+**Nájezdy**
+- Odemknou se až po technologii `warfare` (hráč se rozhodl vstoupit do vojenské hry a dostal šanci postavit obranu). Pak ~1× za 5 min přijde nájezd s varováním (16 s odpočet, banner „Síla X vs tvá obrana Y").
+- Vyřešení: obrana ≥ síla → **ubráněno** (kořist zlata + krátký ×2 buff), jinak **vypleněno** (1–4 budovy zapáleny, ukradeny 2 suroviny, dočasný „Strach z nájezdu" −15 % spokojenosti). Nikdy ne game-over — vždy se dá vzpamatovat.
+
+**Obrana (síla města `g.military`)**
+- Kasárna (vojáci ×3/obsluha), Hradby (+2), Strážní věž (+8), Raketová základna (+40/obsluha). **Velká zeď** (div světa) obranu ×2.
+- Chip ⚔️ v topbaru, zbarví se červeně, když právě probíhající nájezd přesahuje obranu.
+
+**Technika**
+- `computeMilitary(g)` (přeskočí hořící/rozestavěné), počítá se v `tick`. `raidTick`/`resolveRaid` v `slowTick`; `g.runtime.raid` (neukládá se — transientní). Buff `raidFear`, stat `raidsWon`.
+- Techy warfare (é2) → kasárna/hradby, fortification (é3) → věž + Velká zeď, modernArmy (é5) → raketová základna.
+- Achievementy: Obránce, Vojevůdce, Generál. Překlady CZ/EN/DE/FR.

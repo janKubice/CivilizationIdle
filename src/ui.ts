@@ -241,8 +241,8 @@ function costHtml(cost: Rec, extra = ''): string {
 
 // --- Stavby ---
 let buildTab: BCat | 'all' = 'all';
-const CATS: (BCat | 'all')[] = ['all', 'city', 'food', 'mine', 'ind', 'other', 'wonder'];
-const CAT_KEY: Record<string, string> = { all: 'cat.all', city: 'cat.city', food: 'cat.food', mine: 'cat.mine', ind: 'cat.ind', other: 'cat.other', wonder: 'cat.wonder' };
+const CATS: (BCat | 'all')[] = ['all', 'city', 'food', 'mine', 'ind', 'mil', 'other', 'wonder'];
+const CAT_KEY: Record<string, string> = { all: 'cat.all', city: 'cat.city', food: 'cat.food', mine: 'cat.mine', ind: 'cat.ind', mil: 'cat.mil', other: 'cat.other', wonder: 'cat.wonder' };
 
 /** krátký popis řetězce výroby (ikony vstupů → výstupů) pro kartu / modal */
 function recipeStr(def: typeof BUILDINGS[number]): string {
@@ -622,7 +622,8 @@ function showSettings() {
 
 // ---------- top bar ----------
 const chipEls = new Map<string, { root: HTMLElement; amt: HTMLElement; rate: HTMLElement; bar: HTMLElement }>();
-let popChip: HTMLElement, hapChip: HTMLElement, waterChip: HTMLElement, energyChip: HTMLElement, eraChip: HTMLElement, seasonChip: HTMLElement, buffWrap: HTMLElement;
+let popChip: HTMLElement, hapChip: HTMLElement, waterChip: HTMLElement, energyChip: HTMLElement, milChip: HTMLElement, eraChip: HTMLElement, seasonChip: HTMLElement, buffWrap: HTMLElement;
+let raidBanner: HTMLElement;
 const ERA_ICONS = ['🪨', '🥉', '🏛️', '🏰', '🏭', '🏙️', '🚀'];
 const BUFF_KEY: Record<string, string> = { frenzy: 'buff.frenzy', clickFrenzy: 'buff.click', festival: 'buff.festival' };
 
@@ -674,6 +675,14 @@ function updateTopbar() {
     energyChip.innerHTML = `⚡ <b>${fmt(g.energy.prod)}</b><span class="rate">/${fmt(g.energy.use)}</span>`;
     energyChip.classList.toggle('warn', g.energy.throttle < 1);
   } else energyChip.style.display = 'none';
+  // obranná síla — když je co bránit
+  if (g.military > 0 || hasTech(g.s, 'warfare')) {
+    milChip.style.display = '';
+    milChip.innerHTML = `⚔️ <b>${fmt(g.military)}</b>`;
+    const raid = g.runtime.raid;
+    milChip.classList.toggle('warn', !!raid && g.military < raid.strength);
+    milChip.title = t('top.military');
+  } else milChip.style.display = 'none';
   eraChip.innerHTML = `${ERA_ICONS[g.maxEra]} <b>${tera(g.maxEra)}</b>`;
   eraChip.title = t('top.era');
   seasonChip.innerHTML = `${SEASON_ICONS[g.season]} ${t('season.' + g.season)}`;
@@ -710,11 +719,11 @@ export function initUI(game: Game, opts: { renderer: Renderer; onNewGame: () => 
 
   topbar = el('div'); topbar.id = 'topbar'; ui.appendChild(topbar);
   buffWrap = el('span');
-  popChip = el('span', 'chip'); hapChip = el('span', 'chip'); waterChip = el('span', 'chip'); energyChip = el('span', 'chip'); eraChip = el('span', 'chip'); seasonChip = el('span', 'chip');
-  energyChip.style.display = 'none'; waterChip.style.display = 'none';
+  popChip = el('span', 'chip'); hapChip = el('span', 'chip'); waterChip = el('span', 'chip'); energyChip = el('span', 'chip'); milChip = el('span', 'chip'); eraChip = el('span', 'chip'); seasonChip = el('span', 'chip');
+  energyChip.style.display = 'none'; waterChip.style.display = 'none'; milChip.style.display = 'none';
   hapChip.style.cursor = 'pointer';
   hapChip.onclick = () => showHapBreakdown();
-  topbar.appendChild(popChip); topbar.appendChild(waterChip); topbar.appendChild(hapChip); topbar.appendChild(energyChip); topbar.appendChild(eraChip); topbar.appendChild(seasonChip);
+  topbar.appendChild(popChip); topbar.appendChild(waterChip); topbar.appendChild(hapChip); topbar.appendChild(energyChip); topbar.appendChild(milChip); topbar.appendChild(eraChip); topbar.appendChild(seasonChip);
   topbar.appendChild(buffWrap);
   topbar.appendChild(el('span', 'spacer'));
   const home = el('button', 'iconbtn', '🏠') as HTMLButtonElement;
@@ -760,6 +769,9 @@ export function initUI(game: Game, opts: { renderer: Renderer; onNewGame: () => 
 
   hintEl = el('div'); hintEl.id = 'hint'; ui.appendChild(hintEl);
   toastsEl = el('div'); toastsEl.id = 'toasts'; ui.appendChild(toastsEl);
+  raidBanner = el('div');
+  raidBanner.style.cssText = 'position:absolute;top:70px;left:50%;transform:translateX(-50%);z-index:50;padding:8px 18px;border-radius:9px;font-weight:600;font-size:14px;color:#fff;box-shadow:0 4px 18px #000a;pointer-events:none;display:none;text-align:center;white-space:nowrap';
+  ui.appendChild(raidBanner);
   const mini = document.createElement('canvas');
   mini.id = 'minimap'; mini.width = 148; mini.height = 148;
   mini.style.width = '148px'; mini.style.height = '148px';
@@ -801,6 +813,12 @@ export function initUI(game: Game, opts: { renderer: Renderer; onNewGame: () => 
   bus.on('circus', () => toast(t('toast.circus'), 'gold'));
   bus.on('wonderDone', (e: any) => toast(t('toast.wonder', esc(tn('b', e.t))), 'gold'));
   bus.on('skyLaser', (e: any) => toast(t('toast.skyLaser', fmt(e.amt), esc(tres(e.res))), 'gold'));
+  bus.on('raidIncoming', (e: any) => toast(t('toast.raidIncoming', e.strength, fmt(g.military)), 'ach'));
+  bus.on('raidWin', (e: any) => toast(t('toast.raidWin', fmt(e.loot)), 'gold'));
+  bus.on('raidLoss', (e: any) => {
+    const parts = Object.entries(e.stolen as Rec).map(([r, v]) => `${RES_BY[r]?.icon || ''}${fmt(v as number)}`).join(' ');
+    toast(t('toast.raidLoss', e.burned, parts || '—'), 'ach');
+  });
   bus.on('meteor', (e: any) => toast(t('toast.meteor', fmt(e.amt), esc(tres(e.res))), 'gold'));
   bus.on('govBuilt', (e: any) => {
     const now2 = Date.now();
@@ -827,6 +845,16 @@ export function uiFrame(dt: number) {
     uiTimer = 0.25;
     updateTopbar();
   }
+  // varovný banner před nájezdem
+  const raid = g.runtime.raid;
+  if (raid) {
+    const secs = Math.max(0, Math.ceil((raid.resolveAt - Date.now()) / 1000));
+    const win = g.military >= raid.strength;
+    raidBanner.style.display = '';
+    raidBanner.style.background = win ? 'rgba(24,94,50,0.94)' : 'rgba(140,36,30,0.94)';
+    raidBanner.style.border = `2px solid ${win ? '#3fcf6a' : '#ff6a5a'}`;
+    raidBanner.innerHTML = `${t('raid.banner', raid.strength, fmt(g.military), secs)} — <b>${win ? t('raid.willHold') : t('raid.willFall')}</b>`;
+  } else if (raidBanner.style.display !== 'none') raidBanner.style.display = 'none';
   hintTimer -= dt;
   if (hintTimer <= 0) {
     hintTimer = 1;

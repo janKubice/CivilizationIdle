@@ -37,7 +37,7 @@ const CS_UI: Record<string, string> = {
   'build.info': 'Vyber budovu a klikni do mapy. <b>Esc</b>/pravé tl. zruší.',
   'build.slots': '{0} místa/ks', 'build.housing': '+{0} bydlení', 'build.water': '+{0} voda', 'build.wonder': '⏳ stavba {0} s',
   'build.btn': 'Postavit', 'build.cancel': '✕ Zrušit výběr',
-  'cat.all': 'Vše', 'cat.city': '🏠 Město', 'cat.food': '🌾 Jídlo', 'cat.mine': '⛏️ Těžba', 'cat.ind': '🏭 Výroba', 'cat.other': '🎓 Ostatní', 'cat.wonder': '🗿 Divy',
+  'cat.all': 'Vše', 'cat.city': '🏠 Město', 'cat.food': '🌾 Jídlo', 'cat.mine': '⛏️ Těžba', 'cat.ind': '🏭 Výroba', 'cat.mil': '⚔️ Armáda', 'cat.other': '🎓 Ostatní', 'cat.wonder': '🗿 Divy',
   // work panel
   'work.idle': '😴 Nezaměstnaní: <b>{0}</b> / {1}', 'work.foreman': '👷 Předák aktivní',
   'work.empty': 'Postav budovy s pracovními místy (tábor, chýše, lom…) a přiřaď lidem práci.',
@@ -65,7 +65,7 @@ const CS_UI: Record<string, string> = {
   // topbar
   'top.home': 'Na náves', 'top.mute': 'Ztlumit / zapnout zvuk', 'top.era': 'Aktuální éra tvé civilizace',
   'top.pop': 'Populace / bydlení. Voda pro {0} lidí.', 'top.hap': 'Spokojenost — klikni pro rozpis',
-  'top.water': 'Pokrytí vodou / populace',
+  'top.water': 'Pokrytí vodou / populace', 'top.military': 'Obranná síla města proti nájezdům',
   // happiness breakdown
   'hap.title': '😊 Spokojenost: {0} %', 'hap.base': 'Základ', 'hap.food': 'Jídlo', 'hap.water': 'Voda', 'hap.housing': 'Bydlení',
   'hap.services': 'Služby (tržiště, chrám…)', 'hap.bonus': 'Bonusy (techy, upgrady)', 'hap.festival': 'Festival', 'hap.starving': 'HLAD!',
@@ -74,7 +74,7 @@ const CS_UI: Record<string, string> = {
   'title.sub': 'Od prvního kamene k laserovým těžebním puškám.<br>Klikej, stav, zkoumej — a nech své lidičky makat.',
   'title.continue': '▶ Pokračovat', 'title.new': '✦ Nová hra',
   'title.newConfirm': 'Opravdu začít znovu? Současný postup (kromě nastavení) bude smazán, včetně Vzestupů.',
-  'title.newGo': 'Začít znovu', 'title.foot': 'v0.6 „Vzhůru ke hvězdám" · vše se ukládá automaticky · funguje offline',
+  'title.newGo': 'Začít znovu', 'title.foot': 'v0.7 „Obrana a armáda" · vše se ukládá automaticky · funguje offline',
   // settings
   'set.title': '⚙️ Nastavení', 'set.sfx': '🔊 Zvuky', 'set.music': '🎵 Hudba', 'set.particles': '✨ Particly', 'set.daynight': '🌙 Denní cyklus',
   'set.lang': '🌍 Jazyk', 'set.transfer': '<b>Přenos uložené hry</b>', 'set.export': '📤 Export', 'set.import': '📥 Import',
@@ -119,6 +119,12 @@ const CS_UI: Record<string, string> = {
   'auto.housing': 'Bydlení (staví nejlepší dostupné domy)', 'auto.industry': 'Výroba (zpracuje přebytky surovin na vyšší)', 'auto.science': 'Věda (knihovny a učenci)',
   'toast.wonder': '✨ DIV SVĚTA dostavěn: {0}! Cítíš tu sílu?',
   'toast.skyLaser': '🛰️ Orbitální laser zasáhl zem! Získáno +{0} {1} a lidé v úžasu klikají ×10!',
+  'toast.raidIncoming': '⚔️ NÁJEZD! Blíží se nepřátelé (síla {0})! Tvá obrana: {1}. Rychle postav kasárna a hradby!',
+  'toast.raidWin': '🛡️ Nájezd odražen! Z kořisti jsi získal +{0} zlata a lid slaví.',
+  'toast.raidLoss': '💀 Město bylo vypleněno! {0}× budova zapálena, ukradeno: {1}. Posil obranu!',
+  'raid.banner': '⚔️ Nájezd! Síla {0} vs tvá obrana {1} · {2}s',
+  'raid.willHold': 'Ubráníš se ✅', 'raid.willFall': 'Nestačíš! ⚠️',
+  'hap.raid': 'Strach z nájezdu',
   'binfo.lvl': 'Úroveň: {0}', 'binfo.lvlUp': 'Vylepšit na {0}',
   'binfo.big': '★ Velká budova (4-v-1): sloty ×4 a +50 % výkon',
   'binfo.merge': '🔗 Sloučit 4 do velké budovy', 'binfo.split': '✂️ Rozdělit zpět na 4',

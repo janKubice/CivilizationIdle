@@ -285,6 +285,41 @@ export function makeSprites() {
     for (let i = 0; i < 3; i++) { x.beginPath(); x.ellipse(32, 62, 5.5, 2.2, i * Math.PI / 3, 0, 7); x.stroke(); }
   });
 
+  // ---- armáda a obrana ----
+  sprites.barracks = c(32, 44, x => {
+    box(x, 5, 22, 22, 16, '#6e6b52');
+    roof(x, 5, 22, 22, 8, '#4a4838');
+    x.fillStyle = '#3d3a2c'; x.fillRect(13, 30, 6, 8);                       // vrata
+    x.strokeStyle = '#8a2a20'; x.lineWidth = 2; x.beginPath(); x.moveTo(24, 22); x.lineTo(24, 10); x.stroke(); // stožár
+    x.fillStyle = '#c8352a'; x.beginPath(); x.moveTo(24, 10); x.lineTo(31, 13); x.lineTo(24, 16); x.fill();     // vlajka
+    x.fillStyle = '#c8ced8'; x.fillRect(8, 26, 3, 3); x.fillRect(20, 26, 3, 3); // meče/štíty
+  });
+  sprites.wall = c(32, 44, x => {
+    x.fillStyle = '#9aa0a8'; x.fillRect(2, 22, 28, 16);
+    x.fillStyle = '#7d848c';
+    for (let r = 0; r < 2; r++) for (let i = 0; i < 4; i++) x.fillRect(3 + i * 7 + (r % 2) * 3.5, 24 + r * 7, 6, 6);
+    x.fillStyle = '#9aa0a8'; for (let i = 0; i < 4; i++) x.fillRect(2 + i * 8, 18, 5, 4); // cimbuří
+  });
+  sprites.watchtower = c(32, 44, x => {
+    x.fillStyle = '#8d939c'; x.fillRect(9, 16, 14, 22);
+    x.fillStyle = '#6e747d'; x.fillRect(9, 16, 14, 3);
+    x.fillStyle = '#3d4148'; x.fillRect(13, 24, 6, 8);                       // okno
+    x.fillStyle = '#9aa0a8'; for (let i = 0; i < 4; i++) x.fillRect(8 + i * 4.5, 12, 3, 5); // cimbuří
+    x.strokeStyle = '#8a2a20'; x.lineWidth = 1.5; x.beginPath(); x.moveTo(16, 12); x.lineTo(16, 4); x.stroke();
+    x.fillStyle = '#c8352a'; x.beginPath(); x.moveTo(16, 4); x.lineTo(22, 6.5); x.lineTo(16, 9); x.fill();
+  });
+  sprites.missileBase = c(64, 80, x => {
+    box(x, 6, 52, 52, 24, '#5a6470');
+    x.fillStyle = '#454e58'; for (let i = 0; i < 6; i++) x.fillRect(9 + i * 8, 56, 5, 4);
+    // odpalovací silo se raketou
+    x.fillStyle = '#3d4750'; x.fillRect(22, 30, 20, 24);
+    x.fillStyle = '#d8dde4'; x.fillRect(28, 18, 8, 34);
+    x.fillStyle = '#c8352a'; x.beginPath(); x.moveTo(32, 8); x.lineTo(37, 20); x.lineTo(27, 20); x.closePath(); x.fill();
+    x.fillStyle = '#3d4750'; x.beginPath(); x.moveTo(28, 46); x.lineTo(24, 54); x.lineTo(28, 52); x.fill();
+    x.beginPath(); x.moveTo(36, 46); x.lineTo(40, 54); x.lineTo(36, 52); x.fill();
+    x.fillStyle = '#3fcf6a'; x.fillRect(48, 58, 3, 3); x.fillStyle = '#ffd74a'; x.fillRect(12, 58, 3, 3);
+  });
+
   // ---- vesmírná éra (2×2 => 64×80) ----
   sprites.kosmodrom = c(64, 80, x => {
     x.fillStyle = '#8d939c'; x.fillRect(4, 54, 56, 22);                       // betonová plocha
@@ -340,6 +375,25 @@ export function makeSprites() {
     // špička
     x.strokeStyle = '#9a7b52'; x.lineWidth = 2; x.beginPath(); x.moveTo(48, 40); x.lineTo(48, 10); x.stroke();
     x.fillStyle = '#ffd74a'; x.beginPath(); x.arc(48, 9, 2.5, 0, 7); x.fill();
+  });
+  sprites.greatWall = c(96, 132, x => {
+    x.fillStyle = '#00000018'; x.beginPath(); x.ellipse(48, 118, 46, 8, 0, 0, 7); x.fill();
+    // klikatá hradba přes kopce
+    x.fillStyle = '#9aa0a8';
+    x.beginPath();
+    x.moveTo(4, 96); x.lineTo(24, 74); x.lineTo(48, 88); x.lineTo(72, 66); x.lineTo(92, 84);
+    x.lineTo(92, 104); x.lineTo(72, 86); x.lineTo(48, 108); x.lineTo(24, 94); x.lineTo(4, 116); x.closePath(); x.fill();
+    x.fillStyle = '#7d848c'; // kameny
+    x.strokeStyle = '#5a606a'; x.lineWidth = 1;
+    for (const [tx, ty] of [[20, 78], [46, 92], [70, 70]]) {
+      x.fillStyle = '#b0b6be'; x.fillRect(tx - 7, ty - 20, 14, 22);          // strážní věže
+      x.fillStyle = '#8d939c'; x.fillRect(tx - 7, ty - 20, 14, 3);
+      x.fillStyle = '#3d4148'; x.fillRect(tx - 3, ty - 12, 6, 8);
+      x.fillStyle = '#b0b6be'; for (let i = 0; i < 3; i++) x.fillRect(tx - 7 + i * 5, ty - 24, 3.5, 4);
+    }
+    // cimbuří podél zdi
+    x.fillStyle = '#aab0b8';
+    for (let i = 0; i < 9; i++) { const px = 8 + i * 10; x.fillRect(px, 84 - Math.sin(i) * 6, 4, 4); }
   });
   sprites.spaceElevator = c(96, 132, x => {
     x.fillStyle = '#00000018'; x.beginPath(); x.ellipse(48, 124, 34, 7, 0, 0, 7); x.fill();

@@ -20,7 +20,7 @@ export interface BuildingInst {
 /** efektivita podle úrovně budovy */
 export const lvlEff = (lvl?: number) => (lvl === 3 ? 4 : lvl === 2 ? 2 : 1);
 
-export interface Buff { kind: 'frenzy' | 'clickFrenzy' | 'festival' | 'circus'; mult: number; until: number; label: string; icon: string }
+export interface Buff { kind: 'frenzy' | 'clickFrenzy' | 'festival' | 'circus' | 'raidFear'; mult: number; until: number; label: string; icon: string }
 
 export interface Settings {
   sfx: number; music: number; muted: boolean;
@@ -48,7 +48,7 @@ export interface GameState {
   buffs: Buff[];
   auto: Record<string, boolean>;     // Guvernér: auto-stavění (food/wood/store/water)
   legacy: { pts: number; perks: Rec };
-  stats: { peakPop: number; goldenClicked: number; ascensions: number; lifetimeClicks: number; terraformed?: number };
+  stats: { peakPop: number; goldenClicked: number; ascensions: number; lifetimeClicks: number; terraformed?: number; raidsWon?: number };
   settings: Settings;
   nextFestival: number;
 }
@@ -88,6 +88,7 @@ export interface Game {
   season: number;                    // 0 jaro, 1 léto, 2 podzim, 3 zima
   seasonT: number;                   // postup v období 0..1
   cold: boolean;                     // zima bez dřeva na topení
+  military: number;                  // obranná síla města (kasárna, hradby, věže, raketové základny)
   runtime: {
     golden: GoldenCitizen | null;
     buildSel: string | null;
@@ -95,6 +96,7 @@ export interface Game {
     hint: string;
     agentsDirty: boolean;
     started: boolean;
+    raid: { strength: number; spawnAt: number; resolveAt: number; fromX: number; fromY: number } | null;
   };
 }
 
@@ -190,7 +192,8 @@ export function initGame(g: Game, s: GameState) {
   g.housingSum = 0; g.waterSum = 0;
   g.maxEra = 0;
   g.season = 0; g.seasonT = 0; g.cold = false;
-  g.runtime = { golden: null, buildSel: null, paused: true, hint: '', agentsDirty: true, started: false };
+  g.military = 0;
+  g.runtime = { golden: null, buildSel: null, paused: true, hint: '', agentsDirty: true, started: false, raid: null };
   recount(g);
   rebuildOccupancy(g);
 }

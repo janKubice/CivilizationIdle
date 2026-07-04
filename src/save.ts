@@ -43,7 +43,7 @@ function migrate(s: any): GameState | null {
   s.settings = { ...defaultSettings(), ...(s.settings || {}) };
   s.buffs = s.buffs || [];
   s.legacy = s.legacy || { pts: 0, perks: {} };
-  s.stats = { peakPop: 0, goldenClicked: 0, ascensions: 0, lifetimeClicks: 0, terraformed: 0, ...(s.stats || {}) };
+  s.stats = { peakPop: 0, goldenClicked: 0, ascensions: 0, lifetimeClicks: 0, terraformed: 0, raidsWon: 0, ...(s.stats || {}) };
   s.nodeDelta = s.nodeDelta || {};
   s.roads = s.roads || [];
   s.rails = s.rails || [];

@@ -154,6 +154,7 @@ export function tick(g: Game, dt: number) {
     else if (b.kind === 'clickFrenzy') cFrenzy *= b.mult;
     else if (b.kind === 'festival') festHap += 0.2;
     else if (b.kind === 'circus') festHap += 0.15;
+    else if (b.kind === 'raidFear') festHap -= 0.15;   // strach po prohraném nájezdu
   }
   g.frenzy = frenzy; g.clickFrenzy = cFrenzy;
 
@@ -292,6 +293,21 @@ export function tick(g: Game, dt: number) {
     clampAssignments(g);
     bus.emit('popDown', { pop: s.pop });
   }
+
+  g.military = computeMilitary(g);
+}
+
+/** obranná síla města: vojáci + hradby + věže + raketové základny (×2 s Velkou zdí) */
+export function computeMilitary(g: Game): number {
+  let base = activeWorkers(g, 'barracks') * 3 + activeWorkers(g, 'missileBase') * 40;
+  let wallMult = 1;
+  for (const b of g.s.buildings) {
+    if (b.fire || b.dmg || b.build) continue;
+    if (b.t === 'wall') base += 2;
+    else if (b.t === 'watchtower') base += 8;
+    else if (b.t === 'greatWall') wallMult *= 2;
+  }
+  return Math.round(base * wallMult);
 }
 
 function computeHappiness(g: Game, festHap: number) {
@@ -314,6 +330,7 @@ function computeHappiness(g: Game, festHap: number) {
   if ((s.res.fish || 0) > 1 && (s.res.food || 0) > 1) parts.push({ key: 'hap.diet', v: 0.04 });
   if (g.season === 3) parts.push(g.cold ? { key: 'hap.cold', v: -0.1 } : { key: 'hap.cozy', v: 0.03 });
   if (festHap > 0) parts.push({ key: 'hap.festival', v: festHap });
+  else if (festHap < 0) parts.push({ key: 'hap.raid', v: festHap });
   g.hapParts = parts;
   g.happiness = clamp(parts.reduce((a, p) => a + p.v, 0), 0.05, 1);
 }
@@ -424,6 +441,8 @@ export function slowTick(g: Game, seconds: number, rand: () => number) {
   // --- Vesmírná éra: terraforming a lasery z nebe ---
   terraformTick(g, seconds, rand);
   skyLaserTick(g, seconds, rand);
+  // --- nájezdy nepřátel a obrana města ---
+  raidTick(g, seconds, rand);
 
   // achievementy
   for (const a of ACHS) {
@@ -683,6 +702,61 @@ function skyLaserTick(g: Game, seconds: number, rand: () => number) {
   g.s.totals[resId] = (g.s.totals[resId] || 0) + amt;
   g.s.buffs.push({ kind: 'clickFrenzy', mult: 10, until: Date.now() + 15000, label: '', icon: '🛰️' });
   bus.emit('skyLaser', { x, y, res: resId, amt });
+}
+
+/** nájezdy nepřátel: hrozba přijde s varováním, hráč se musí ubránit obranou */
+function raidTick(g: Game, seconds: number, rand: () => number) {
+  const s = g.s;
+  const now = Date.now();
+  // probíhající nájezd → vyřeš při dosažení města
+  if (g.runtime.raid) {
+    if (now >= g.runtime.raid.resolveAt) resolveRaid(g, rand);
+    return;
+  }
+  // nájezdy jen po odemčení Válečnictví (hráč dostal šanci postavit obranu)
+  if (!hasTech(s, 'warfare') || s.buildings.length < 8 || s.pop < 20) return;
+  if (rand() >= seconds / 300) return;   // ~1× za 5 min
+  const strength = Math.round((6 + s.pop * 0.12) * (1 + g.maxEra * 0.35) * (0.8 + rand() * 0.6));
+  const ang = rand() * 6.283, R = 22 + rand() * 8;
+  const fromX = Math.round(Math.cos(ang) * R), fromY = Math.round(Math.sin(ang) * R);
+  g.runtime.raid = { strength, spawnAt: now, resolveAt: now + 16000, fromX, fromY };
+  bus.emit('raidIncoming', { strength, fromX, fromY });
+}
+
+function resolveRaid(g: Game, rand: () => number) {
+  const raid = g.runtime.raid;
+  if (!raid) return;
+  g.runtime.raid = null;
+  const mil = g.military;
+  if (mil >= raid.strength) {
+    // ubráněno — kořist z poražených nájezdníků
+    const loot = Math.round(raid.strength * 5);
+    g.s.res.gold = (g.s.res.gold || 0) + loot;
+    g.s.totals.gold = (g.s.totals.gold || 0) + loot;
+    g.s.stats.raidsWon = (g.s.stats.raidsWon || 0) + 1;
+    g.s.buffs.push({ kind: 'frenzy', mult: 2, until: Date.now() + 30000, label: '', icon: '🛡️' });
+    bus.emit('raidWin', { strength: raid.strength, loot });
+  } else {
+    // prolomeno — požáry, krádež surovin, strach ve městě
+    const over = (raid.strength - mil) / raid.strength;
+    const burn = Math.min(4, 1 + Math.floor(over * 4));
+    const cands = g.s.buildings.filter(b => !b.fire && !b.dmg && !b.build && !B[b.t].unbuildable && (B[b.t].jobs || B[b.t].housing));
+    let burned = 0;
+    for (let i = 0; i < burn && cands.length; i++) {
+      const v = cands.splice(Math.floor(rand() * cands.length), 1)[0];
+      v.fire = 30; burned++;
+    }
+    const stolen: Rec = {};
+    const rlist = RES.filter(r => (g.s.res[r.id] || 0) > 0 && isFinite(capOf(g, r.id)));
+    for (let i = 0; i < 2 && rlist.length; i++) {
+      const r = rlist.splice(Math.floor(rand() * rlist.length), 1)[0];
+      const amt = Math.floor((g.s.res[r.id] || 0) * (0.1 + over * 0.15));
+      if (amt > 0) { g.s.res[r.id] -= amt; stolen[r.id] = amt; }
+    }
+    g.s.buffs.push({ kind: 'raidFear', mult: 1, until: Date.now() + 60000, label: '', icon: '💀' });
+    recount(g);
+    bus.emit('raidLoss', { strength: raid.strength, burned, stolen });
+  }
 }
 
 function autoAssign(g: Game) {

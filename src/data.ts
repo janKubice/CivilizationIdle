@@ -33,7 +33,7 @@ export const RES: ResDef[] = [
 export const RES_BY: Record<string, ResDef> = Object.fromEntries(RES.map(r => [r.id, r]));
 
 // ---------- Budovy ----------
-export type BCat = 'city' | 'food' | 'mine' | 'ind' | 'other' | 'wonder';
+export type BCat = 'city' | 'food' | 'mine' | 'ind' | 'other' | 'wonder' | 'mil';
 
 /** efekty Divu světa (aplikují se globálně po dostavbě) */
 export interface WonderFx { click?: number; global?: number; research?: number; cost?: number }
@@ -103,6 +103,12 @@ export const BUILDINGS: BDef[] = [
   // éra 6: vesmírný program a terraforming
   { id: 'kosmodrom', name: 'Kosmodrom', icon: '🚀', desc: 'Startují odsud rakety ke hvězdám. Spotřebuje elektroniku a ocel, chrlí obrovské množství vědy.', era: 6, cat: 'other', cost: { steel: 400, electronics: 200, machinery: 100 }, size: 2, jobs: 3, jobName: 'Inženýři', recipe: { inputs: { electronics: 0.02, steel: 0.08 }, outputs: { research: 5 } }, energyUse: 4, tech: 'spaceProgram' },
   { id: 'terraformer', name: 'Terraformovací věž', icon: '🌐', desc: 'Přetváří okolní krajinu — mění vodu, hory i poušť v úrodnou zem, na které lze stavět. Neomezená expanze!', era: 6, cat: 'other', cost: { steel: 500, electronics: 150, machinery: 80 }, size: 2, jobs: 2, jobName: 'Technici', tech: 'terraforming' },
+  // armáda a obrana
+  { id: 'barracks', name: 'Kasárna', icon: '⚔️', desc: 'Cvičí vojáky. Každý voják zvyšuje obrannou sílu města proti nájezdům.', era: 2, cat: 'mil', cost: { wood: 60, stone: 40 }, size: 1, jobs: 3, jobName: 'Vojáci', tech: 'warfare' },
+  { id: 'wall', name: 'Hradby', icon: '🧱', desc: 'Kamenná zeď. Pasivně posiluje obranu města (+2 síla).', era: 2, cat: 'mil', cost: { stone: 35 }, size: 1, tech: 'warfare' },
+  { id: 'watchtower', name: 'Strážní věž', icon: '🗼', desc: 'Ostřelovači z výšky. Silná pasivní obrana (+8) a klid ve městě.', era: 3, cat: 'mil', cost: { stone: 90, wood: 40 }, size: 1, hap: 0.01, tech: 'fortification' },
+  { id: 'missileBase', name: 'Raketová základna', icon: '🚀', desc: 'Moderní obrana. Každá obsluha přidá obrovskou obrannou sílu (+40). 🚀', era: 5, cat: 'mil', cost: { steel: 150, machinery: 40 }, size: 2, jobs: 2, jobName: 'Raketometčíci', tech: 'modernArmy' },
+  { id: 'greatWall', name: 'Velká zeď', icon: '🏯', desc: 'Div světa (3×3). Nedobytná hradba: zdvojnásobí obranu města a +15 % veškeré produkce.', era: 3, cat: 'wonder', cost: { stone: 3000, brick: 1000, gold: 1000 }, size: 3, hap: 0.06, tech: 'fortification', wonder: true, buildTime: 120, wfx: { global: 1.15 } },
 ];
 export const B: Record<string, BDef> = Object.fromEntries(BUILDINGS.map(b => [b.id, b]));
 
@@ -136,11 +142,13 @@ export const TECHS: TDef[] = [
   { id: 'roads', name: 'Silnice', desc: 'Dlážděné cesty: +dosah dopravy, město roste podél cest.', era: 2, cost: 450, req: ['wheel', 'writing'], fx: { haul: 20 } },
   { id: 'ironWorking', name: 'Železo', desc: 'Odemyká železný důl a železárnu. Železné nástroje (síla 1,2).', era: 2, cost: 500, mats: { copper: 30 }, req: ['copperSmelting', 'writing'], fx: { unlock: ['ironMine', 'ironworks'], toolPower: 1.2 } },
   { id: 'theology', name: 'Chrámy', desc: 'Odemyká chrám. +5 % spokojenosti.', era: 2, cost: 600, req: ['writing'], fx: { unlock: ['temple'], hap: 0.05 } },
+  { id: 'warfare', name: 'Válečnictví', desc: 'Odemyká kasárna a hradby. Od teď mohou přijít nájezdy — braň své město! ⚔️', era: 2, cost: 550, req: ['ironWorking'], fx: { unlock: ['barracks', 'wall'] } },
   // éra 3 – středověk
   { id: 'guilds', name: 'Cechy', desc: 'Dílny ×2, tržiště ×1,5.', era: 3, cost: 1500, req: ['ironWorking', 'marketplace'], fx: { job: { workshop: 2, market: 1.5 } } },
   { id: 'millwork', name: 'Mlýny', desc: 'Vodní a větrné mlýny: pily ×2, farmy ×1,5.', era: 3, cost: 2000, req: ['ironWorking'], fx: { job: { sawmill: 2, farm: 1.5 } } },
   { id: 'education', name: 'Univerzita', desc: 'Vzdělání: věda ×2, knihovny ×2.', era: 3, cost: 2500, req: ['masonry'], fx: { research: 2, job: { library: 2 } } },
   { id: 'monuments', name: 'Monumenty', desc: 'Odemyká stavbu monumentů.', era: 3, cost: 3000, req: ['theology', 'masonry'], fx: { unlock: ['monument'] } },
+  { id: 'fortification', name: 'Opevnění', desc: 'Odemyká strážní věže a Velkou zeď (div světa). Pořádná obrana.', era: 3, cost: 2800, req: ['warfare', 'masonry'], fx: { unlock: ['watchtower', 'greatWall'] } },
   // éra 4 – průmysl
   { id: 'coalMining', name: 'Těžba uhlí', desc: 'Odemyká uhelný důl.', era: 4, cost: 6000, req: ['education'], fx: { unlock: ['coalMine'] } },
   { id: 'steel', name: 'Ocel', desc: 'Odemyká ocelárnu. Ocelové nástroje (síla 2,5).', era: 4, cost: 9000, mats: { iron: 60 }, req: ['coalMining'], fx: { unlock: ['steelworks'], toolPower: 2.5 } },
@@ -157,6 +165,7 @@ export const TECHS: TDef[] = [
   { id: 'automobiles', name: 'Automobilismus', desc: 'Auta a náklaďáky brázdí silnice: +30 dosah dopravy a živé moderní město. 🚗', era: 5, cost: 85000, mats: { steel: 40 }, req: ['industrialization', 'electricity'], fx: { haul: 30, special: 'cars' } },
   { id: 'industrialFarming', name: 'Průmyslové zemědělství', desc: 'Kombajny a skleníky: farmy ×6 a už netrpí zimou. 🚜', era: 5, cost: 75000, mats: { machinery: 30 }, req: ['heavyMachinery'], fx: { job: { farm: 6 }, special: 'agroIndustry' } },
   { id: 'skyscrapers', name: 'Mrakodrapy', desc: 'Odemyká paneláky (+100 bydlení). Megaměsta se rodí.', era: 5, cost: 150000, mats: { steel: 100 }, req: ['concrete', 'electronicsTech'], fx: { unlock: ['towerBlock'] } },
+  { id: 'modernArmy', name: 'Moderní armáda', desc: 'Odemyká raketovou základnu — nezastavitelná obrana proti jakémukoli nájezdu. 🚀', era: 5, cost: 100000, mats: { steel: 60 }, req: ['electronicsTech', 'steel'], fx: { unlock: ['missileBase'] } },
   { id: 'automation', name: 'Automatizace', desc: 'Veškerá produkce ×2.', era: 5, cost: 120000, mats: { machinery: 50 }, req: ['electronicsTech'], fx: { global: 2 } },
   // éra 6 – budoucnost
   { id: 'laserMining', name: 'Laserové těžební pušky', desc: 'Tvoji lidé těží LASERY. Těžba ×10, klik ×10. 🔴', era: 6, cost: 300000, mats: { electronics: 30 }, req: ['heavyMachinery', 'automation'], fx: { gather: 10, click: 10, special: 'laser' } },
@@ -230,6 +239,9 @@ export const ACHS: AchDef[] = [
   { id: 'monumental', name: 'Monumentální', desc: 'Postav monument.', icon: '🗿', cond: g => (g.bCount.monument || 0) >= 1 },
   { id: 'wonder1', name: 'Sedmý div', desc: 'Dostav Div světa.', icon: '🗼', cond: g => g.s.buildings.some((b: any) => B[b.t]?.wonder && !b.build) },
   { id: 'nuclear', name: 'Atomový věk', desc: 'Postav jadernou elektrárnu.', icon: '☢️', cond: g => (g.bCount.nuclearPlant || 0) >= 1 },
+  { id: 'defender', name: 'Obránce', desc: 'Postav kasárna a braň své město.', icon: '⚔️', cond: g => (g.bCount.barracks || 0) >= 1 },
+  { id: 'warlord', name: 'Vojevůdce', desc: 'Odraz nájezd nepřátel.', icon: '🛡️', cond: g => (g.s.stats.raidsWon || 0) >= 1 },
+  { id: 'general', name: 'Generál', desc: 'Dosáhni obranné síly 100.', icon: '🎖️', cond: g => (g.military || 0) >= 100 },
   { id: 'spaceAge', name: 'Vzhůru ke hvězdám', desc: 'Postav Kosmodrom a vypusť rakety.', icon: '🚀', cond: g => (g.bCount.kosmodrom || 0) >= 1 },
   { id: 'greenEarth', name: 'Zahradník planet', desc: 'Přetvoř terraformingem 100 dlaždic.', icon: '🌐', cond: g => (g.s.stats.terraformed || 0) >= 100 },
   { id: 'fromOrbit', name: 'Z oběžné dráhy', desc: 'Vyzkoumej orbitální lasery.', icon: '🛰️', cond: g => g.s.techs.includes('orbitalLasers') },

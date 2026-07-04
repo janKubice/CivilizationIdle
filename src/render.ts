@@ -35,7 +35,7 @@ const AGENT_COLORS: Record<string, string> = {
   smelter: '#e88a2a', workshop: '#e8c46a', market: '#ffd777', library: '#8fb8ff',
   ironworks: '#a8adba', brickworks: '#c4593e', steelworks: '#c8d2e0', powerPlant: '#ffe14a',
   factory: '#9fb4d8', hitechLab: '#6fd8c8', trainStation: '#b8a97e', nuclearPlant: '#3fcf6a',
-  kosmodrom: '#e8eef4', terraformer: '#3fcf6a', idle: '#d8c8b0',
+  kosmodrom: '#e8eef4', terraformer: '#3fcf6a', barracks: '#8a3a2e', missileBase: '#6a7480', idle: '#d8c8b0',
 };
 
 const NODE_SPRITES = ['tree', 'berry', 'rock', 'copperVein', 'ironVein', 'coalVein', 'fishShoal'];
@@ -116,6 +116,15 @@ export class Renderer {
       this.laserStrikes.push({ x: wx, y: wy, life: 1.4 });
       this.burst(wx, wy, '#ff3a3a', 34); this.burst(wx, wy, '#ffd74a', 20);
       this.float(wx, wy - 14, '🛰️ +' + fmt(e.amt), RES_BY[e.res]?.color || '#ff5a4a', true);
+    });
+    // nájezd — výsledek bitvy u města
+    bus.on('raidWin', () => {
+      for (let i = 0; i < 34; i++) this.burst((Math.random() - 0.5) * 90, (Math.random() - 0.5) * 90, ['#ffd74a', '#7ee787', '#8fb8ff'][i % 3], 2);
+      this.float(0, -24, '🛡️ ✦ 🛡️', '#7ee787', true);
+    });
+    bus.on('raidLoss', () => {
+      for (let i = 0; i < 46; i++) this.burst((Math.random() - 0.5) * 110, (Math.random() - 0.5) * 110, i % 2 ? '#ff4a3a' : '#555555', 2);
+      this.float(0, -24, '💀 ✦ 💀', '#ff7b72', true);
     });
   }
 
@@ -683,6 +692,36 @@ export class Renderer {
       x.fillStyle = `rgba(255,240,200,${0.85 * L.life})`; x.fillRect(sx - w / 6, 0, w / 3, sy);
       x.fillStyle = `rgba(255,120,80,${0.5 * L.life})`;
       x.beginPath(); x.ellipse(sx, sy, 18 * z * L.life + 6, 6 * z * L.life + 2, 0, 0, 7); x.fill();
+    }
+
+    // --- nájezd nepřátel: horda pochoduje k městu, obránci ji čekají ---
+    if (g.runtime.raid) {
+      const raid = g.runtime.raid;
+      const prog = clamp((Date.now() - raid.spawnAt) / Math.max(1, raid.resolveAt - raid.spawnAt), 0, 1);
+      const hx = lerp(raid.fromX * TILE, 0, prog * 0.82), hy = lerp(raid.fromY * TILE, 0, prog * 0.82);
+      const nR = Math.min(16, 3 + Math.ceil(raid.strength / 8));
+      for (let i = 0; i < nR; i++) {
+        const [px, py] = this.worldToScreen(hx + (hash2(31, i, 0) - 0.5) * 46, hy + (hash2(32, i, 0) - 0.5) * 34);
+        if (px < -20 || px > this.W + 20 || py < -20 || py > this.H + 20) continue;
+        const s = z, bob = Math.sin(now / 120 + i) * 1.2 * s;
+        x.fillStyle = '#00000030'; x.beginPath(); x.ellipse(px, py + s, 4 * s, 1.6 * s, 0, 0, 7); x.fill();
+        x.fillStyle = '#5a2020'; x.fillRect(px - 2.5 * s, py - 7 * s + bob, 5 * s, 6 * s);
+        x.fillStyle = '#7a4030'; x.beginPath(); x.arc(px, py - 9 * s + bob, 2.5 * s, 0, 7); x.fill();
+        x.strokeStyle = '#8a939c'; x.lineWidth = 1.2 * s;
+        x.beginPath(); x.moveTo(px + 3.5 * s, py - 13 * s + bob); x.lineTo(px + 3.5 * s, py + bob); x.stroke();
+        x.fillStyle = '#c8ced8'; x.beginPath(); x.moveTo(px + 3.5 * s, py - 15 * s + bob); x.lineTo(px + 2 * s, py - 12 * s + bob); x.lineTo(px + 5 * s, py - 12 * s + bob); x.fill();
+      }
+      const nD = Math.min(14, Math.ceil(g.military / 6));
+      const dirx = Math.sign(raid.fromX) || 1, diry = Math.sign(raid.fromY) || 1;
+      for (let i = 0; i < nD; i++) {
+        const [px, py] = this.worldToScreen((hash2(41, i, 0) - 0.5) * 40 + dirx * 24, (hash2(42, i, 0) - 0.5) * 30 + diry * 24);
+        if (px < -20 || px > this.W + 20 || py < -20 || py > this.H + 20) continue;
+        const s = z, bob = Math.sin(now / 130 + i) * 1.2 * s;
+        x.fillStyle = '#00000030'; x.beginPath(); x.ellipse(px, py + s, 4 * s, 1.6 * s, 0, 0, 7); x.fill();
+        x.fillStyle = '#3a5b96'; x.fillRect(px - 2.5 * s, py - 7 * s + bob, 5 * s, 6 * s);
+        x.fillStyle = '#e8c49a'; x.beginPath(); x.arc(px, py - 9 * s + bob, 2.5 * s, 0, 7); x.fill();
+        x.fillStyle = '#c8ced8'; x.beginPath(); x.arc(px - 3 * s, py - 6 * s + bob, 2.4 * s, 0, 7); x.fill();
+      }
     }
 
     const laser = hasTech(g.s, 'laserMining');
