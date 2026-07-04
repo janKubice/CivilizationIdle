@@ -39,6 +39,7 @@ export interface GameState {
   roads: string[];
   rails: string[];
   railRoutes: [number, number][][];  // polyliny tras vláčků (dlaždicové souřadnice středů)
+  terra: string[];                   // terraformované dlaždice (přeměněné na úrodnou zem)
   nodeDelta: Record<string, Record<number, number>>;
   techs: string[];
   upgrades: Rec;                     // id -> level
@@ -47,7 +48,7 @@ export interface GameState {
   buffs: Buff[];
   auto: Record<string, boolean>;     // Guvernér: auto-stavění (food/wood/store/water)
   legacy: { pts: number; perks: Rec };
-  stats: { peakPop: number; goldenClicked: number; ascensions: number; lifetimeClicks: number };
+  stats: { peakPop: number; goldenClicked: number; ascensions: number; lifetimeClicks: number; terraformed?: number };
   settings: Settings;
   nextFestival: number;
 }
@@ -127,6 +128,7 @@ export function newState(seed: number, carry?: { legacy: GameState['legacy']; ac
     roads,
     rails: [],
     railRoutes: [],
+    terra: [],
     nodeDelta: {},
     techs,
     upgrades: {},
@@ -174,7 +176,7 @@ export function rebuildOccupancy(g: Game) {
 /** naváže stav na Game objekt (zachovává identitu g) */
 export function initGame(g: Game, s: GameState) {
   g.s = s;
-  g.world = new World(s.seed, s.nodeDelta, s.roads, s.rails);
+  g.world = new World(s.seed, s.nodeDelta, s.roads, s.rails, s.terra);
   g.m = baseMults();
   g.rates = {};
   g.happiness = 0.6;

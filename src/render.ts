@@ -26,13 +26,16 @@ interface Train { path: [number, number][]; dist: number; dir: 1 | -1; pause: nu
 interface Flake { x: number; y: number; vy: number; vx: number; ph: number }
 interface Heli { x: number; y: number; tx: number; ty: number; rot: number }
 interface Car { tx: number; ty: number; ntx: number; nty: number; t: number; px: number; py: number; kind: 'car' | 'truck'; color: string; speed: number }
+interface Rocket { x: number; y: number; vy: number; life: number }
+interface LaserStrike { x: number; y: number; life: number }
 
 const AGENT_COLORS: Record<string, string> = {
   forestCamp: '#4a8040', gatherHut: '#c9a83e', quarry: '#8d939c', farm: '#7fb356',
   copperMine: '#e08d4f', ironMine: '#c8cdd8', coalMine: '#454a52', sawmill: '#c08a4e',
   smelter: '#e88a2a', workshop: '#e8c46a', market: '#ffd777', library: '#8fb8ff',
   ironworks: '#a8adba', brickworks: '#c4593e', steelworks: '#c8d2e0', powerPlant: '#ffe14a',
-  factory: '#9fb4d8', hitechLab: '#6fd8c8', trainStation: '#b8a97e', nuclearPlant: '#3fcf6a', idle: '#d8c8b0',
+  factory: '#9fb4d8', hitechLab: '#6fd8c8', trainStation: '#b8a97e', nuclearPlant: '#3fcf6a',
+  kosmodrom: '#e8eef4', terraformer: '#3fcf6a', idle: '#d8c8b0',
 };
 
 const NODE_SPRITES = ['tree', 'berry', 'rock', 'copperVein', 'ironVein', 'coalVein', 'fishShoal'];
@@ -55,6 +58,9 @@ export class Renderer {
   private trains: Train[] = [];
   private trainRoutes = -1;
   private cars: Car[] = [];
+  private rockets: Rocket[] = [];
+  private rocketTimer = 3;
+  private laserStrikes: LaserStrike[] = [];
   private precip: Flake[] = [];
   private agentSync = 0;
   private mini: HTMLCanvasElement | null = null;
@@ -101,12 +107,23 @@ export class Renderer {
       for (let i = 0; i < 70; i++) this.burst(wx + (Math.random() - 0.5) * 150, wy - 30 + (Math.random() - 0.5) * 130, cols[i % 5], 2);
       this.float(wx, wy - 40, '✨ ★ ✨', '#ffd74a', true);
     });
+    // terraforming: přebarvená krajina → zneplatni chunk cache
+    bus.on('terraform', (e: any) => { this.chunkCache.delete(key(e.cx, e.cy)); });
+    // orbitální laser: paprsek z nebe + výbuch
+    bus.on('skyLaser', (e: any) => {
+      if (e.x === -1 && e.y === -1) return;
+      const wx = e.x * TILE + TILE / 2, wy = e.y * TILE + TILE / 2;
+      this.laserStrikes.push({ x: wx, y: wy, life: 1.4 });
+      this.burst(wx, wy, '#ff3a3a', 34); this.burst(wx, wy, '#ffd74a', 20);
+      this.float(wx, wy - 14, '🛰️ +' + fmt(e.amt), RES_BY[e.res]?.color || '#ff5a4a', true);
+    });
   }
 
   reset() {
     this.chunkCache.clear();
     this.particles.length = 0; this.floats.length = 0; this.agentMap.clear(); this.helis.length = 0;
     this.cars.length = 0; this.trains.length = 0; this.trainRoutes = -1;
+    this.rockets.length = 0; this.laserStrikes.length = 0;
     this.cam.x = 0; this.cam.y = 0; this.cam.z = 1;
   }
 
@@ -622,6 +639,52 @@ export class Renderer {
       x.fillStyle = '#fff6c8'; x.fillRect((L - 0.5) * s, -2.4 * s, 1.2 * s, 1.6 * s); x.fillRect((L - 0.5) * s, 0.8 * s, 1.2 * s, 1.6 * s); // světla
       x.restore();
     }
+
+    // --- rakety startující z kosmodromu ---
+    this.rocketTimer -= dt;
+    if (this.rocketTimer <= 0) {
+      this.rocketTimer = 3 + Math.random() * 3;
+      if (hasTech(g.s, 'spaceProgram') && this.rockets.length < 4) {
+        for (const b of g.s.buildings) {
+          if (b.t !== 'kosmodrom' || b.build || b.fire || b.dmg || !activeWorkers(g, 'kosmodrom')) continue;
+          const wx = b.x * TILE + TILE, wy = b.y * TILE + TILE * 0.35;
+          if (wx < vx0 || wx > vx1 || wy < vy0 || wy > vy1) continue;
+          this.rockets.push({ x: wx, y: wy, vy: 38, life: 1 });
+          break;
+        }
+      }
+    }
+    for (let i = this.rockets.length - 1; i >= 0; i--) {
+      const rk = this.rockets[i];
+      rk.vy += 130 * dt; rk.y -= rk.vy * dt; rk.life -= dt / 6;
+      if (rk.life <= 0 || rk.y < vy0 - 600) { this.rockets.splice(i, 1); continue; }
+      if (g.s.settings.particles && Math.random() < 0.85)
+        this.particles.push({ x: rk.x + (Math.random() - 0.5) * 5, y: rk.y + 12, vx: (Math.random() - 0.5) * 8, vy: 26 + Math.random() * 20, life: 1, max: 1.3, color: Math.random() < 0.5 ? '#ff9840' : '#d8d8d890', size: 3 });
+      const [sx, sy] = this.worldToScreen(rk.x, rk.y);
+      if (sx < -40 || sx > this.W + 40) continue;
+      const s = z;
+      x.fillStyle = '#ffb84a'; x.beginPath(); x.moveTo(sx - 3 * s, sy + 8 * s); x.lineTo(sx, sy + (16 + Math.random() * 6) * s); x.lineTo(sx + 3 * s, sy + 8 * s); x.fill();
+      x.fillStyle = '#eef2f6'; x.fillRect(sx - 3 * s, sy - 6 * s, 6 * s, 14 * s);
+      x.fillStyle = '#c8352a'; x.beginPath(); x.moveTo(sx, sy - 14 * s); x.lineTo(sx + 3 * s, sy - 6 * s); x.lineTo(sx - 3 * s, sy - 6 * s); x.fill();
+      x.fillStyle = '#3a7ac8'; x.beginPath(); x.arc(sx, sy - 1 * s, 1.6 * s, 0, 7); x.fill();
+    }
+
+    // --- lasery z nebe (orbitální zásahy) ---
+    for (let i = this.laserStrikes.length - 1; i >= 0; i--) {
+      const L = this.laserStrikes[i]; L.life -= dt / 1.4;
+      if (L.life <= 0) { this.laserStrikes.splice(i, 1); continue; }
+      const [sx, sy] = this.worldToScreen(L.x, L.y);
+      const w = (3 + 9 * L.life) * z * (0.6 + 0.4 * Math.sin(now / 40));
+      const grad = x.createLinearGradient(sx, 0, sx, sy);
+      grad.addColorStop(0, 'rgba(255,80,80,0)');
+      grad.addColorStop(0.7, `rgba(255,60,60,${0.5 * L.life})`);
+      grad.addColorStop(1, `rgba(255,220,180,${0.9 * L.life})`);
+      x.fillStyle = grad; x.fillRect(sx - w / 2, 0, w, sy);
+      x.fillStyle = `rgba(255,240,200,${0.85 * L.life})`; x.fillRect(sx - w / 6, 0, w / 3, sy);
+      x.fillStyle = `rgba(255,120,80,${0.5 * L.life})`;
+      x.beginPath(); x.ellipse(sx, sy, 18 * z * L.life + 6, 6 * z * L.life + 2, 0, 0, 7); x.fill();
+    }
+
     const laser = hasTech(g.s, 'laserMining');
     for (const a of this.agentMap.values()) {
       const [sx, sy] = this.worldToScreen(a.x, a.y);

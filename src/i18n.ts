@@ -74,7 +74,7 @@ const CS_UI: Record<string, string> = {
   'title.sub': 'Od prvního kamene k laserovým těžebním puškám.<br>Klikej, stav, zkoumej — a nech své lidičky makat.',
   'title.continue': '▶ Pokračovat', 'title.new': '✦ Nová hra',
   'title.newConfirm': 'Opravdu začít znovu? Současný postup (kromě nastavení) bude smazán, včetně Vzestupů.',
-  'title.newGo': 'Začít znovu', 'title.foot': 'v0.5 „Megalomanie" · vše se ukládá automaticky · funguje offline',
+  'title.newGo': 'Začít znovu', 'title.foot': 'v0.6 „Vzhůru ke hvězdám" · vše se ukládá automaticky · funguje offline',
   // settings
   'set.title': '⚙️ Nastavení', 'set.sfx': '🔊 Zvuky', 'set.music': '🎵 Hudba', 'set.particles': '✨ Particly', 'set.daynight': '🌙 Denní cyklus',
   'set.lang': '🌍 Jazyk', 'set.transfer': '<b>Přenos uložené hry</b>', 'set.export': '📤 Export', 'set.import': '📥 Import',
@@ -118,6 +118,7 @@ const CS_UI: Record<string, string> = {
   'auto.store': 'Sklady (když něco přetéká)', 'auto.water': 'Studny (když chybí voda)',
   'auto.housing': 'Bydlení (staví nejlepší dostupné domy)', 'auto.industry': 'Výroba (zpracuje přebytky surovin na vyšší)', 'auto.science': 'Věda (knihovny a učenci)',
   'toast.wonder': '✨ DIV SVĚTA dostavěn: {0}! Cítíš tu sílu?',
+  'toast.skyLaser': '🛰️ Orbitální laser zasáhl zem! Získáno +{0} {1} a lidé v úžasu klikají ×10!',
   'binfo.lvl': 'Úroveň: {0}', 'binfo.lvlUp': 'Vylepšit na {0}',
   'binfo.big': '★ Velká budova (4-v-1): sloty ×4 a +50 % výkon',
   'binfo.merge': '🔗 Sloučit 4 do velké budovy', 'binfo.split': '✂️ Rozdělit zpět na 4',

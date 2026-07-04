@@ -285,6 +285,32 @@ export function makeSprites() {
     for (let i = 0; i < 3; i++) { x.beginPath(); x.ellipse(32, 62, 5.5, 2.2, i * Math.PI / 3, 0, 7); x.stroke(); }
   });
 
+  // ---- vesmírná éra (2×2 => 64×80) ----
+  sprites.kosmodrom = c(64, 80, x => {
+    x.fillStyle = '#8d939c'; x.fillRect(4, 54, 56, 22);                       // betonová plocha
+    x.fillStyle = '#6e747d'; for (let i = 0; i < 7; i++) x.fillRect(6 + i * 8, 56, 6, 18);
+    x.fillStyle = '#3d4148'; x.fillRect(26, 40, 12, 18);                      // rampa
+    // raketa
+    x.fillStyle = '#eef2f6'; x.fillRect(27, 20, 10, 34);
+    x.fillStyle = '#c8352a'; x.beginPath(); x.moveTo(32, 6); x.lineTo(37, 22); x.lineTo(27, 22); x.closePath(); x.fill();
+    x.fillStyle = '#3a7ac8'; x.beginPath(); x.arc(32, 34, 2.6, 0, 7); x.fill();
+    x.fillStyle = '#c8352a'; x.beginPath(); x.moveTo(27, 46); x.lineTo(22, 56); x.lineTo(27, 54); x.closePath(); x.fill();
+    x.beginPath(); x.moveTo(37, 46); x.lineTo(42, 56); x.lineTo(37, 54); x.closePath(); x.fill();
+    // obslužná věž
+    x.strokeStyle = '#9aa0a8'; x.lineWidth = 2; x.strokeRect(41, 22, 10, 34);
+    x.beginPath(); x.moveTo(41, 30); x.lineTo(37, 30); x.moveTo(41, 44); x.lineTo(37, 44); x.stroke();
+    x.fillStyle = '#ffd74a'; x.fillRect(48, 24, 2, 2); x.fillRect(48, 40, 2, 2);
+  });
+  sprites.terraformer = c(64, 80, x => {
+    box(x, 10, 50, 44, 26, '#5f7d94');
+    x.fillStyle = '#9fd8e8'; x.fillRect(16, 56, 32, 8);
+    x.fillStyle = '#7d94a4'; x.fillRect(28, 16, 8, 38);                        // stožár
+    x.fillStyle = '#3fcf6a'; x.beginPath(); x.arc(32, 16, 10, Math.PI, 0); x.fill();  // emitor
+    x.fillStyle = '#bfffd0'; x.beginPath(); x.arc(32, 16, 4, 0, 7); x.fill();
+    x.strokeStyle = 'rgba(63,207,106,.7)'; x.lineWidth = 1.5;                   // zelené prstence
+    for (let i = 0; i < 3; i++) { x.beginPath(); x.ellipse(32, 22 + i * 4, 14 - i * 2.5, 3, 0, 0, Math.PI); x.stroke(); }
+  });
+
   // ---- Divy světa (3×3 => 96×132) ----
   sprites.pyramid = c(96, 132, x => {
     x.fillStyle = '#00000018'; x.beginPath(); x.ellipse(48, 122, 44, 8, 0, 0, 7); x.fill();
@@ -439,4 +465,6 @@ export const NIGHT_WINDOWS: Record<string, [number, number][]> = {
   towerBlock: [[9, 9], [15, 9], [20, 9], [9, 20], [15, 20], [20, 20], [9, 30], [20, 30]],
   arcology: [[10, 50], [20, 50], [30, 50], [40, 50], [15, 34], [25, 34], [35, 34]],
   nuclearPlant: [[8, 58], [16, 58], [30, 58], [38, 58]],
+  kosmodrom: [[8, 60], [16, 60], [48, 60]],
+  terraformer: [[16, 58], [24, 58], [40, 58]],
 };

@@ -2,7 +2,7 @@
 // Agregovaný výpočet — O(druhy budov), ne O(lidé). Viz docs/03-people-and-work.md.
 
 import { clamp, lerp, bus, key, hash2 } from './util';
-import { B_WATER, B_MOUNTAIN } from './config';
+import { B_WATER, B_MOUNTAIN, CHUNK } from './config';
 import {
   RES, B, BUILDINGS, TECHS, TECH_BY, UPGRADES, UPG_BY, ACHS, ACH_BONUS,
   PERKS, PERK_BY, NODE_DEFS, ADJ_RULES, MERGEABLE, SEASON_LEN, Rec,
@@ -421,6 +421,9 @@ export function slowTick(g: Game, seconds: number, rand: () => number) {
   // --- Stavební cechy / úřad: auto-slučování a auto-vylepšování ---
   if (g.m.autoMerge) autoMergeStep(g);
   if (g.m.autoUpgrade) autoUpgradeStep(g);
+  // --- Vesmírná éra: terraforming a lasery z nebe ---
+  terraformTick(g, seconds, rand);
+  skyLaserTick(g, seconds, rand);
 
   // achievementy
   for (const a of ACHS) {
@@ -633,6 +636,53 @@ function autoUpgradeStep(g: Game): boolean {
   }
   if (bestIdx >= 0) { upgradeBuilding(g, bestIdx); return true; }
   return false;
+}
+
+/** Terraformovací věže mění okolní vodu/hory/poušť v úrodnou zem */
+function terraformTick(g: Game, seconds: number, rand: () => number) {
+  if (activeWorkers(g, 'terraformer') <= 0) return;
+  const towers = g.s.buildings.filter(b => b.t === 'terraformer' && !b.fire && !b.dmg && !b.build);
+  if (!towers.length) return;
+  const perTower = Math.max(1, Math.round(3 * seconds));
+  const chunksChanged = new Set<string>();
+  let any = false;
+  for (const b of towers) {
+    let done = 0;
+    for (let tries = 0; tries < 60 && done < perTower; tries++) {
+      const r = 1 + Math.floor(rand() * 9);
+      const a = rand() * 6.283;
+      const tx = b.x + Math.round(Math.cos(a) * r), ty = b.y + Math.round(Math.sin(a) * r);
+      if (g.world.terraform(tx, ty)) {
+        done++; any = true;
+        g.s.stats.terraformed = (g.s.stats.terraformed || 0) + 1;
+        chunksChanged.add(Math.floor(tx / CHUNK) + ',' + Math.floor(ty / CHUNK));
+      }
+    }
+  }
+  if (any) {
+    for (const ck of chunksChanged) { const [cx, cy] = ck.split(',').map(Number); bus.emit('terraform', { cx, cy }); }
+  }
+}
+
+/** Orbitální lasery: družice pravidelně zasáhne zem a nadělí obří kořist */
+function skyLaserTick(g: Game, seconds: number, rand: () => number) {
+  if (!hasTech(g.s, 'orbitalLasers')) return;
+  if (rand() >= seconds / 55) return;   // ~1× za ~55 s
+  const nodes: NodeInst[] = [];
+  for (const c of g.world.chunks.values()) for (const n of c.nodes) nodes.push(n);
+  let x = -1, y = -1, resId = 'gold';
+  if (nodes.length) {
+    const n = nodes[Math.floor(rand() * nodes.length)];
+    const def = NODE_DEFS[n.kind];
+    resId = def.res;
+    n.stock = def.max; g.world.writeDelta(n);   // laser navíc obnoví ložisko
+    x = n.tx; y = n.ty;
+  }
+  const amt = Math.max(300, Math.floor((g.rates[resId] || 0) * 600));
+  g.s.res[resId] = Math.min(capOf(g, resId), (g.s.res[resId] || 0) + amt);
+  g.s.totals[resId] = (g.s.totals[resId] || 0) + amt;
+  g.s.buffs.push({ kind: 'clickFrenzy', mult: 10, until: Date.now() + 15000, label: '', icon: '🛰️' });
+  bus.emit('skyLaser', { x, y, res: resId, amt });
 }
 
 function autoAssign(g: Game) {

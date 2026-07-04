@@ -100,6 +100,9 @@ export const BUILDINGS: BDef[] = [
   { id: 'pyramid', name: 'Velká pyramida', icon: '🔺', desc: 'Div světa (3×3). Sjednotí národ: ruční těžba (klik) ×2 a velká spokojenost.', era: 3, cat: 'wonder', cost: { stone: 2500, gold: 400 }, size: 3, hap: 0.08, tech: 'monuments', wonder: true, buildTime: 90, wfx: { click: 2 } },
   { id: 'steelTower', name: 'Ocelová věž', icon: '🗼', desc: 'Div světa (3×3). Zázrak inženýrství: −15 % cen staveb a +20 % veškeré produkce.', era: 4, cat: 'wonder', cost: { steel: 600, brick: 800, gold: 2000 }, size: 3, hap: 0.1, tech: 'industrialization', wonder: true, buildTime: 120, wfx: { cost: 0.85, global: 1.2 } },
   { id: 'spaceElevator', name: 'Vesmírný výtah', icon: '🛰️', desc: 'Div světa (3×3). Brána ke hvězdám: veškerá produkce ×2 a věda ×1,5.', era: 6, cat: 'wonder', cost: { steel: 3000, electronics: 400, gold: 50000 }, size: 3, hap: 0.12, tech: 'robotics', wonder: true, buildTime: 180, wfx: { global: 2, research: 1.5 } },
+  // éra 6: vesmírný program a terraforming
+  { id: 'kosmodrom', name: 'Kosmodrom', icon: '🚀', desc: 'Startují odsud rakety ke hvězdám. Spotřebuje elektroniku a ocel, chrlí obrovské množství vědy.', era: 6, cat: 'other', cost: { steel: 400, electronics: 200, machinery: 100 }, size: 2, jobs: 3, jobName: 'Inženýři', recipe: { inputs: { electronics: 0.02, steel: 0.08 }, outputs: { research: 5 } }, energyUse: 4, tech: 'spaceProgram' },
+  { id: 'terraformer', name: 'Terraformovací věž', icon: '🌐', desc: 'Přetváří okolní krajinu — mění vodu, hory i poušť v úrodnou zem, na které lze stavět. Neomezená expanze!', era: 6, cat: 'other', cost: { steel: 500, electronics: 150, machinery: 80 }, size: 2, jobs: 2, jobName: 'Technici', tech: 'terraforming' },
 ];
 export const B: Record<string, BDef> = Object.fromEntries(BUILDINGS.map(b => [b.id, b]));
 
@@ -111,7 +114,7 @@ export interface TechFx {
   toolPower?: number;                // nastaví (ne násobí) sílu nástrojů
   haul?: number;                     // + dosah dopravy
   hap?: number; growth?: number;
-  special?: 'laser' | 'heli' | 'fusion' | 'ascension' | 'agroIndustry' | 'cars';
+  special?: 'laser' | 'heli' | 'fusion' | 'ascension' | 'agroIndustry' | 'cars' | 'orbital';
 }
 export interface TDef { id: string; name: string; desc: string; era: number; cost: number; mats?: Rec; req: string[]; fx: TechFx }
 
@@ -162,6 +165,10 @@ export const TECHS: TDef[] = [
   { id: 'arcologyTech', name: 'Arkologie', desc: 'Odemyká Arkologie — mrakodrap-město pro 1000 lidí. 🌃', era: 6, cost: 600000, mats: { electronics: 100 }, req: ['robotics'], fx: { unlock: ['arcology'] } },
   { id: 'fusion', name: 'Fúze', desc: 'Elektrárny ×10 energie a už nepotřebují uhlí. ☀️', era: 6, cost: 800000, mats: { electronics: 120 }, req: ['robotics'], fx: { special: 'fusion' } },
   { id: 'transcendence', name: 'Transcendence', desc: 'Tvá civilizace je připravena vstoupit do dějin… Odemyká Vzestup.', era: 6, cost: 1000000, req: ['fusion', 'rotorcraft'], fx: { special: 'ascension' } },
+  // éra 6 – hvězdy
+  { id: 'spaceProgram', name: 'Vesmírný program', desc: 'Odemyká Kosmodrom — rakety startují ke hvězdám. 🚀', era: 6, cost: 700000, mats: { electronics: 100 }, req: ['automation', 'electronicsTech'], fx: { unlock: ['kosmodrom'] } },
+  { id: 'terraforming', name: 'Terraforming', desc: 'Odemyká Terraformovací věž — přetvoř vodu, hory i poušť v úrodnou zem. 🌐', era: 6, cost: 900000, mats: { machinery: 80 }, req: ['spaceProgram'], fx: { unlock: ['terraformer'] } },
+  { id: 'orbitalLasers', name: 'Orbitální lasery', desc: 'Lasery z nebe! Družice pravidelně zasáhnou zem a nadělí obří kořist. Klik ×2. 🔴🛰️', era: 6, cost: 1200000, mats: { electronics: 150 }, req: ['spaceProgram', 'laserMining'], fx: { click: 2, special: 'orbital' } },
 ];
 export const TECH_BY: Record<string, TDef> = Object.fromEntries(TECHS.map(t => [t.id, t]));
 
@@ -223,6 +230,9 @@ export const ACHS: AchDef[] = [
   { id: 'monumental', name: 'Monumentální', desc: 'Postav monument.', icon: '🗿', cond: g => (g.bCount.monument || 0) >= 1 },
   { id: 'wonder1', name: 'Sedmý div', desc: 'Dostav Div světa.', icon: '🗼', cond: g => g.s.buildings.some((b: any) => B[b.t]?.wonder && !b.build) },
   { id: 'nuclear', name: 'Atomový věk', desc: 'Postav jadernou elektrárnu.', icon: '☢️', cond: g => (g.bCount.nuclearPlant || 0) >= 1 },
+  { id: 'spaceAge', name: 'Vzhůru ke hvězdám', desc: 'Postav Kosmodrom a vypusť rakety.', icon: '🚀', cond: g => (g.bCount.kosmodrom || 0) >= 1 },
+  { id: 'greenEarth', name: 'Zahradník planet', desc: 'Přetvoř terraformingem 100 dlaždic.', icon: '🌐', cond: g => (g.s.stats.terraformed || 0) >= 100 },
+  { id: 'fromOrbit', name: 'Z oběžné dráhy', desc: 'Vyzkoumej orbitální lasery.', icon: '🛰️', cond: g => g.s.techs.includes('orbitalLasers') },
   { id: 'golden5', name: 'Lovec štěstí', desc: 'Chyť 5 zlatých občanů.', icon: '🌟', cond: g => (g.s.stats.goldenClicked || 0) >= 5 },
   { id: 'ascend1', name: 'Vzestup', desc: 'Proveď první Vzestup.', icon: '✨', cond: g => (g.s.stats.ascensions || 0) >= 1 },
   { id: 'laserAge', name: 'Světelná éra', desc: 'Vyzkoumej laserové těžební pušky.', icon: '🔴', cond: g => g.s.techs.includes('laserMining') },

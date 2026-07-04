@@ -32,14 +32,17 @@ export class World {
   roads = new Set<string>();
   /** železniční koleje */
   rails = new Set<string>();
+  /** terraformované dlaždice (přeměněné na úrodnou zem) */
+  terra = new Set<string>();
   /** reference na delty ze save (mutujeme přímo) */
   nodeDelta: Record<string, Record<number, number>>;
 
-  constructor(seed: number, nodeDelta: Record<string, Record<number, number>>, roads: string[], rails: string[] = []) {
+  constructor(seed: number, nodeDelta: Record<string, Record<number, number>>, roads: string[], rails: string[] = [], terra: string[] = []) {
     this.seed = seed;
     this.nodeDelta = nodeDelta;
     this.roads = new Set(roads);
     this.rails = new Set(rails);
+    this.terra = new Set(terra);
   }
 
   elevation(tx: number, ty: number): number {
@@ -86,6 +89,8 @@ export class World {
         const fk = key(tx, ty);
         const forced = FORCED.get(fk);
         if (forced !== undefined && (b === B_WATER || b === B_MOUNTAIN)) b = B_GRASS;
+        // terraforming: přeměněné dlaždice se stanou úrodnou zemí
+        if (this.terra.has(fk) && b !== B_FOREST) b = B_GRASS;
         tiles[ly * CHUNK + lx] = b;
         const col = colors[b]; rSum += col[0]; gSum += col[1]; bSum += col[2];
 
@@ -141,6 +146,21 @@ export class World {
   nodeAt(tx: number, ty: number): NodeInst | undefined {
     const cx = Math.floor(tx / CHUNK), cy = Math.floor(ty / CHUNK);
     return this.chunk(cx, cy).nodeMap.get(key(tx, ty));
+  }
+
+  /** terraformuj dlaždici na úrodnou zem (voda/hory/poušť → tráva). Vrací true při změně. */
+  terraform(tx: number, ty: number): boolean {
+    const k = key(tx, ty);
+    if (this.terra.has(k)) return false;
+    const b = this.biomeAt(tx, ty);
+    if (b === B_GRASS || b === B_FOREST) return false;   // už zelené
+    if (this.nodeAt(tx, ty)) return false;               // uzly nech být
+    this.terra.add(k);
+    // aktualizuj načtený chunk okamžitě
+    const cx = Math.floor(tx / CHUNK), cy = Math.floor(ty / CHUNK);
+    const c = this.chunks.get(key(cx, cy));
+    if (c) c.tiles[(ty - cy * CHUNK) * CHUNK + (tx - cx * CHUNK)] = B_GRASS;
+    return true;
   }
 
   /** lze na dlaždici stavět? */

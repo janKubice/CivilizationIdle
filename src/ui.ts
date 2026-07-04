@@ -800,6 +800,7 @@ export function initUI(game: Game, opts: { renderer: Renderer; onNewGame: () => 
   bus.on('repaired', (e: any) => toast(t('toast.repaired', esc(tn('b', e.t)))));
   bus.on('circus', () => toast(t('toast.circus'), 'gold'));
   bus.on('wonderDone', (e: any) => toast(t('toast.wonder', esc(tn('b', e.t))), 'gold'));
+  bus.on('skyLaser', (e: any) => toast(t('toast.skyLaser', fmt(e.amt), esc(tres(e.res))), 'gold'));
   bus.on('meteor', (e: any) => toast(t('toast.meteor', fmt(e.amt), esc(tres(e.res))), 'gold'));
   bus.on('govBuilt', (e: any) => {
     const now2 = Date.now();

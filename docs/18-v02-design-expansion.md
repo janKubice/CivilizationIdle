@@ -241,3 +241,24 @@ Každá fáze končí buildem jednoho HTML, testy (smoke/features/endgame + nov�
 5. **Čitelnost řetězců** 🎨: klik na surovinu v panelu Sklad otevře **výrobní řetězec** — co ji vyrábí (s receptem), co ji spotřebovává, případně jaký tech to odemyká; karty budov nově ukazují recept ikonami (🪵→🟫).
 
 **Megalomanie (jádro v0.5):** činžák (+30) → panelák (+100) → **arkologie (+1000 bydlení)**, růst populace škáluje s érou (×1+0,5/éra) → města v desítkách tisíc; tech *Průmyslové zemědělství* (farmy ×6, skleníky ruší zimu); **jaderná elektrárna** ☢️ s chladicími věžemi; tech *Automobily* — **auta a náklaďáky jezdí po silnicích**, silnice se v éře 4+ mění na **asfalt s pruhy**; **divy světa** se stavbou v čase (lešení → ohňostroj): Velká pyramida (klik ×2), Ocelová věž (stavby −15 %, produkce ×1,2), Vesmírný výtah (produkce ×2, věda ×1,5). Nové achievementy: Velkoměsto (10 000), Sedmý div, Atomový věk.
+
+---
+
+## Addendum 3 — v0.6 „Vzhůru ke hvězdám" (implementováno)
+
+Vesmírný program a terraforming jako velké finále éry Budoucnosti (zbývající body z 1. feedbacku: lasery z nebe, vesmírný program, terraforming).
+
+**Budovy**
+- **Kosmodrom** (2×2, tech `spaceProgram`) — spotřebuje elektroniku + ocel, chrlí obrovské množství vědy; startují z něj rakety (vizuál: raketa stoupá s ohnivým chvostem).
+- **Terraformovací věž** (2×2, tech `terraforming`) — mění okolní vodu/hory/poušť v úrodnou zem. Trvalé, ukládá se (`s.terra`), krajina se překreslí. Umožňuje **stavět i tam, kde dřív byla voda/hory** → neomezená expanze.
+
+**Technologie (éra 6)**
+- `spaceProgram` (odemyká Kosmodrom), `terraforming` (odemyká věž), `orbitalLasers` (klik ×2 + periodické „lasery z nebe").
+
+**Orbitální lasery (lasery z nebe)**
+- Po vyzkoumání pravidelně (~1× za 55 s) družice zasáhne náhodné ložisko: obnoví ho a nadělí obří kořist + klikací šílenství ×10. Vizuál: rudý paprsek z horního okraje obrazovky + výbuch.
+
+**Technická realizace**
+- `World.terra` (Set), aplikace v `generate()` i za běhu přes `World.terraform(tx,ty)`; render zneplatní chunk cache přes event `terraform`.
+- `terraformTick`/`skyLaserTick` v `slowTick`. Rakety a laserové paprsky jsou render-entity (`rockets`, `laserStrikes`).
+- Achievementy: Vzhůru ke hvězdám (Kosmodrom), Zahradník planet (100 dlaždic), Z oběžné dráhy (orbitální lasery). Překlady CZ/EN/DE/FR.
