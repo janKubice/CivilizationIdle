@@ -54,44 +54,61 @@ const RES_FREQ: Record<string, number> = {
   wood: 300, food: 420, stone: 220, copperOre: 260, ironOre: 240, coal: 200, gold: 660, research: 540,
 };
 
-// ---- generativní hudební podklad ----
-const CHORDS = [
-  [220, 261.6, 329.6],       // Am
-  [174.6, 220, 261.6],       // F
-  [196, 246.9, 293.7],       // G
-  [261.6, 329.6, 392],       // C
+// ---- generativní hudební podklad (vyvíjí se érou) ----
+const CHORD_SETS = [
+  [[220, 261.6, 329.6], [174.6, 220, 261.6], [196, 246.9, 293.7], [261.6, 329.6, 392]],        // é0–1: doba kamenná/bronz (Am F G C)
+  [[261.6, 329.6, 392], [293.7, 370, 440], [329.6, 415.3, 493.9], [349.2, 440, 523.3]],         // é2–3: jasnější antika/středověk
+  [[130.8, 164.8, 196], [146.8, 185, 220], [164.8, 207.7, 246.9], [196, 246.9, 293.7]],         // é4–5: hlubší industriál
+  [[261.6, 311.1, 392], [277.2, 329.6, 415.3], [233.1, 293.7, 349.2], [311.1, 392, 466.2]],     // é6: vesmírné harmonie
 ];
+const PENTA_SETS = [
+  [440, 523.3, 587.3, 659.3, 784], [523.3, 587.3, 659.3, 784, 880],
+  [392, 440, 523.3, 587.3, 659.3], [523.3, 622.3, 698.5, 784, 932.3],
+];
+function eraGroup(): number { const e = g?.maxEra ?? 0; return e >= 6 ? 3 : e >= 4 ? 2 : e >= 2 ? 1 : 0; }
 let chordIdx = 0;
 
 function playChord() {
   if (!ctx || (g?.s.settings.music ?? 0) <= 0.01) return;
-  const chord = CHORDS[chordIdx % CHORDS.length];
+  const grp = eraGroup();
+  const raid = !!g?.runtime?.raid;
+  const chord = CHORD_SETS[grp][chordIdx % 4];
   chordIdx++;
   const t0 = ctx.currentTime;
   for (const f of chord) {
     for (const det of [-2, 2]) {
       const o = ctx.createOscillator();
       const gn = ctx.createGain();
-      o.type = 'triangle';
+      o.type = raid ? 'sawtooth' : 'triangle';
       o.frequency.value = f + det * 0.5;
       gn.gain.setValueAtTime(0.0001, t0);
-      gn.gain.linearRampToValueAtTime(0.5, t0 + 2.5);
+      gn.gain.linearRampToValueAtTime(raid ? 0.35 : 0.5, t0 + 2.5);
       gn.gain.linearRampToValueAtTime(0.0001, t0 + 7.5);
       o.connect(gn); gn.connect(musGain);
       o.start(t0); o.stop(t0 + 8);
     }
   }
-  // občasná jemná melodie (pentatonika)
-  if (Math.random() < 0.6) {
-    const penta = [440, 523.3, 587.3, 659.3, 784];
-    const n = 2 + Math.floor(Math.random() * 3);
+  // basová linka, když je město velké (vrstvení)
+  if ((g?.s.pop ?? 0) > 150) {
+    const o = ctx.createOscillator(); const gn = ctx.createGain();
+    o.type = 'sine'; o.frequency.value = chord[0] / 2;
+    gn.gain.setValueAtTime(0.0001, t0);
+    gn.gain.linearRampToValueAtTime(0.4, t0 + 1.5);
+    gn.gain.linearRampToValueAtTime(0.0001, t0 + 7);
+    o.connect(gn); gn.connect(musGain);
+    o.start(t0); o.stop(t0 + 7.5);
+  }
+  // jemná melodie (pentatonika dle éry; při nájezdu napjatější a hustší)
+  if (raid || Math.random() < 0.6) {
+    const penta = PENTA_SETS[grp];
+    const n = raid ? 4 : 2 + Math.floor(Math.random() * 3);
     for (let i = 0; i < n; i++) {
       const f = penta[Math.floor(Math.random() * penta.length)];
-      const t = t0 + 1 + i * (0.8 + Math.random());
+      const t = t0 + 1 + i * (raid ? 0.5 : 0.8 + Math.random());
       const o = ctx.createOscillator(); const gn = ctx.createGain();
-      o.type = 'sine'; o.frequency.value = f;
+      o.type = raid ? 'square' : 'sine'; o.frequency.value = f;
       gn.gain.setValueAtTime(0.0001, t);
-      gn.gain.linearRampToValueAtTime(0.35, t + 0.05);
+      gn.gain.linearRampToValueAtTime(raid ? 0.22 : 0.35, t + 0.05);
       gn.gain.exponentialRampToValueAtTime(0.001, t + 1.4);
       o.connect(gn); gn.connect(musGain);
       o.start(t); o.stop(t + 1.5);
@@ -184,5 +201,34 @@ export function initAudio(game: Game) {
   bus.on('circus', () => {
     if (!ctx) return;
     [523, 659, 523, 784, 659, 1047].forEach((f, i) => blip(f, 0.14, 'square', 0.09, 0, i * 0.11));
+  });
+  // v0.8 eventy
+  bus.on('rank', () => {
+    if (!ctx) return;
+    [392, 523, 659, 784, 1047, 1319].forEach((f, i) => blip(f, 0.5, 'triangle', 0.16, 0, i * 0.1));
+  });
+  bus.on('quest', () => {
+    if (!ctx || !throttled('quest', 120)) return;
+    blip(784, 0.1, 'sine', 0.14); blip(1047, 0.16, 'sine', 0.13, 0, 0.09);
+  });
+  bus.on('wonderDone', () => {
+    if (!ctx) return;
+    [262, 330, 392, 523, 659, 784, 1047, 1319].forEach((f, i) => blip(f, 0.6, 'triangle', 0.17, 0, i * 0.13));
+  });
+  bus.on('raidIncoming', () => {
+    if (!ctx) return;
+    for (let i = 0; i < 3; i++) { blip(110, 0.5, 'sawtooth', 0.18, -10, i * 0.55); blip(146, 0.5, 'sawtooth', 0.12, -8, i * 0.55); }
+  });
+  bus.on('raidWin', () => {
+    if (!ctx) return;
+    [392, 523, 659, 880, 1175].forEach((f, i) => blip(f, 0.35, 'triangle', 0.16, 0, i * 0.1));
+  });
+  bus.on('raidLoss', () => {
+    if (!ctx) return;
+    [330, 262, 196, 147, 110].forEach((f, i) => blip(f, 0.4, 'sawtooth', 0.15, -20, i * 0.12));
+  });
+  bus.on('skyLaser', () => {
+    if (!ctx) return;
+    blip(1800, 0.5, 'sawtooth', 0.14, -1600); blip(90, 0.4, 'square', 0.16, 40, 0.1);
   });
 }

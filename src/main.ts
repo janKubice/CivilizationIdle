@@ -141,7 +141,7 @@ canvas.addEventListener('wheel', (e) => {
 }, { passive: false });
 
 function zoomAt(sx: number, sy: number, newZ: number) {
-  newZ = clamp(newZ, 0.35, 2.5);
+  newZ = clamp(newZ, 0.15, 2.5);
   const [wx, wy] = renderer.screenToWorld(sx, sy);
   renderer.cam.z = newZ;
   const [wx2, wy2] = renderer.screenToWorld(sx, sy);
@@ -198,7 +198,7 @@ function handleClick(sx: number, sy: number) {
   const node = g.world.nodeAt(tx, ty);
   if (node && node.stock > 0) {
     const r = gather(g, node);
-    if (r) bus.emit('gather', { tx: node.tx, ty: node.ty, amt: r.amt, res: r.res, crit: r.crit });
+    if (r) bus.emit('gather', { tx: node.tx, ty: node.ty, amt: r.amt, res: r.res, crit: r.crit, combo: r.combo });
     return;
   }
 

@@ -31,8 +31,30 @@ export interface Dict {
 // ---------- CS: obsah z data.ts (kanonický zdroj), UI stringy zde ----------
 const CS_UI: Record<string, string> = {
   // panely a sidebar
-  'p.build': 'Stavby', 'p.work': 'Práce', 'p.store': 'Sklad', 'p.tech': 'Věda', 'p.upg': 'Vylepš.', 'p.ach': 'Úspěchy', 'p.asc': 'Vzestup',
-  't.build': '🏗️ Stavby', 't.work': '👷 Pracovníci', 't.store': '📦 Sklad', 't.tech': '🔬 Technologie', 't.upg': '💡 Vylepšení', 't.ach': '🏆 Úspěchy', 't.asc': '✨ Vzestup',
+  'p.build': 'Stavby', 'p.work': 'Práce', 'p.store': 'Sklad', 'p.quest': 'Cíle', 'p.tech': 'Věda', 'p.upg': 'Vylepš.', 'p.stats': 'Statistiky', 'p.ach': 'Úspěchy', 'p.asc': 'Vzestup',
+  't.build': '🏗️ Stavby', 't.work': '👷 Pracovníci', 't.store': '📦 Sklad', 't.quest': '🎯 Cíle', 't.tech': '🔬 Technologie', 't.upg': '💡 Vylepšení', 't.stats': '📊 Statistiky', 't.ach': '🏆 Úspěchy', 't.asc': '✨ Vzestup',
+  // hodnosti města
+  'rank.0': 'Osada', 'rank.1': 'Vesnice', 'rank.2': 'Město', 'rank.3': 'Velkoměsto', 'rank.4': 'Metropole', 'rank.5': 'Megapole', 'rank.6': 'Ekumenopolis',
+  'top.rank': 'Hodnost města — bonus +{0} % produkce',
+  'toast.rank': '🎖️ Tvé město povýšilo na: <b>{0}</b>! Bonus produkce roste.',
+  // cíle / questy
+  'quest.head': 'Splněno <b>{0}</b>/{1} cílů',
+  'quest.reward': 'Odměna: {0}',
+  'quest.q_wood': 'Nasbírej 40 dřeva', 'quest.q_hut': 'Postav chatrč', 'quest.q_camp': 'Postav tábor nebo chýši',
+  'quest.q_assign': 'Přiřaď někoho do práce', 'quest.q_library': 'Postav knihovnu', 'quest.q_tech': 'Vyzkoumej technologii',
+  'quest.q_pop25': 'Dosáhni 25 obyvatel', 'quest.q_market': 'Postav tržiště', 'quest.q_golden': 'Chyť zlatého občana',
+  'quest.q_district': 'Vytvoř čtvrť', 'quest.q_era': 'Dosáhni éry Průmyslu', 'quest.q_wonder': 'Dostav Div světa',
+  'toast.quest': '🎯 Cíl splněn: <b>{0}</b>! Odměna: {1}',
+  // statistiky
+  'stats.head': 'Přehled tvé civilizace', 'stats.rankBonus': 'bonus +{0} % produkce',
+  'stats.playtime': 'Odehráno: {0}', 'stats.clicks': 'Kliků celkem: {0}', 'stats.peak': 'Rekord populace: {0}',
+  'stats.buildings': 'Budov: {0}', 'stats.military': 'Obrana: {0}', 'stats.asc': 'Vzestupů: {0}',
+  'stats.popG': 'Populace', 'stats.hapG': 'Spokojenost', 'stats.prodG': 'Produkce/s', 'stats.wait': 'Sbírám data…',
+  // eventy s volbou
+  'ev.merchants.t': '🐫 Kupecká karavana', 'ev.merchants.d': 'Zastavila se karavana a nabízí obchod: dáš 100 jídla za 300 zlata?',
+  'ev.wanderers.t': '🚶 Skupina tuláků', 'ev.wanderers.d': 'Před branami stojí tuláci a chtějí se přidat k tvému městu.',
+  'ev.accept': 'Přijmout', 'ev.decline': 'Odmítnout',
+  'perk.reqAsc': 'Vyžaduje {0} Vzestupů',
   // build panel
   'build.info': 'Vyber budovu a klikni do mapy. <b>Esc</b>/pravé tl. zruší.',
   'build.slots': '{0} místa/ks', 'build.housing': '+{0} bydlení', 'build.water': '+{0} voda', 'build.wonder': '⏳ stavba {0} s',
@@ -74,7 +96,7 @@ const CS_UI: Record<string, string> = {
   'title.sub': 'Od prvního kamene k laserovým těžebním puškám.<br>Klikej, stav, zkoumej — a nech své lidičky makat.',
   'title.continue': '▶ Pokračovat', 'title.new': '✦ Nová hra',
   'title.newConfirm': 'Opravdu začít znovu? Současný postup (kromě nastavení) bude smazán, včetně Vzestupů.',
-  'title.newGo': 'Začít znovu', 'title.foot': 'v0.7 „Obrana a armáda" · vše se ukládá automaticky · funguje offline',
+  'title.newGo': 'Začít znovu', 'title.foot': 'v0.8 „Impérium" · vše se ukládá automaticky · funguje offline',
   // settings
   'set.title': '⚙️ Nastavení', 'set.sfx': '🔊 Zvuky', 'set.music': '🎵 Hudba', 'set.particles': '✨ Particly', 'set.daynight': '🌙 Denní cyklus',
   'set.lang': '🌍 Jazyk', 'set.transfer': '<b>Přenos uložené hry</b>', 'set.export': '📤 Export', 'set.import': '📥 Import',
@@ -104,7 +126,7 @@ const CS_UI: Record<string, string> = {
   'err.terrain': 'Tady stavět nejde.', 'err.res': 'Nedostatek surovin.', 'err.tech': 'Chybí technologie.',
   'err.sci': 'Nedostatek vědy.', 'err.req': 'Chybí předpoklady.', 'err.max': 'Maximální úroveň.', 'err.legacy': 'Nedostatek Odkazu.',
   'err.era': 'Vyžaduje vyšší éru.', 'err.merge': 'Ke sloučení chybí 2×2 stejných budov.',
-  'err.water': 'Musí stát u vody.',
+  'err.water': 'Musí stát u vody.', 'err.asc': 'Vyžaduje víc Vzestupů.',
   'season.0': 'Jaro', 'season.1': 'Léto', 'season.2': 'Podzim', 'season.3': 'Zima',
   'toast.season': 'Začíná {0}!', 'toast.rails': '🚂 Koleje položeny — mezi nádražími jezdí vlak!',
   'hap.diet': 'Pestrá strava (ryby)', 'hap.cold': 'MRZNOU! (došlo dřevo na topení)', 'hap.cozy': 'Útulná zima (topení)',

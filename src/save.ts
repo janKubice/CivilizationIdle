@@ -50,6 +50,7 @@ function migrate(s: any): GameState | null {
   s.railRoutes = s.railRoutes || [];
   s.terra = s.terra || [];
   s.achs = s.achs || [];
+  s.quests = s.quests || [];
   s.techs = s.techs || [];
   s.upgrades = s.upgrades || {};
   s.assigned = s.assigned || {};

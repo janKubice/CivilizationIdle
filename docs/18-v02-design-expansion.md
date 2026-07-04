@@ -281,3 +281,21 @@ Poslední velká položka z prvního feedbacku: nepřátelé / armáda. Přidáv
 - `computeMilitary(g)` (přeskočí hořící/rozestavěné), počítá se v `tick`. `raidTick`/`resolveRaid` v `slowTick`; `g.runtime.raid` (neukládá se — transientní). Buff `raidFear`, stat `raidsWon`.
 - Techy warfare (é2) → kasárna/hradby, fortification (é3) → věž + Velká zeď, modernArmy (é5) → raketová základna.
 - Achievementy: Obránce, Vojevůdce, Generál. Překlady CZ/EN/DE/FR.
+
+---
+
+## Addendum 5 — v0.8 „Impérium" (implementováno)
+
+Čtyři oblasti podle feedbacku (megalomanie, balanc, early háčky, statistiky+hudba) + oprava bugu.
+
+**Hodnosti města (megalomanie)** — Osada → Vesnice → Město → Velkoměsto → Metropole → Megapole → Ekumenopolis podle populace; každá hodnost +8 % globální produkce (chip v topbaru, ohňostroj při povýšení). Čtvrti mají nové stupně (12/25 budov → +40 %/+60 %). Přehledový odzoom (🔭, zoom až 0,18).
+
+**Balanc + hlubší Vzestup** — pozdní techy (é4–6) zdraženy ×2/2,6/3,4, aby cesta k endgame trvala. ascendGain méně štědrý (/8000 místo /2000). Perky prohloubeny (Prosperita max 25 atd.) + nové: Válečná pokladna, Megaměsto (od 3 Vzestupů), Přetlak (×1,1/úroveň donekonečna, od 5 Vzestupů). První Vzestup už nevykoupí vše.
+
+**Cíle/questy + early háčky** — 12 datově řízených cílů s odměnami (panel 🎯); klik combo (rychlé klikání násobí zisk až ×2, plovoucí „🔥 combo"); eventy s volbou (kupci, tuláci) — modal s rozhodnutím.
+
+**Statistiky, grafy, hudba** — panel 📊 s canvas grafy (populace, spokojenost, produkce/s z ring bufferů) + přehled běhu; generativní hudba se vyvíjí érou (kmenové → antika → industriál → vesmír), při nájezdu zhoustne, basová linka u velkých měst; nové SFX (hodnost, quest, roh nájezdu, fanfára divu, laser).
+
+**Fix** — potvrzení „Nová hra" se zobrazovalo pod titulkou (z-index modalu 60 < 100) → modaly na z-index 120.
+
+Test v08.mjs + všech 10 předchozích suit prochází (stará čísla v testech dorovnána kvůli rebalancu a bohatší dynamice).

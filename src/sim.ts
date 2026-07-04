@@ -6,6 +6,7 @@ import { B_WATER, B_MOUNTAIN, CHUNK } from './config';
 import {
   RES, B, BUILDINGS, TECHS, TECH_BY, UPGRADES, UPG_BY, ACHS, ACH_BONUS,
   PERKS, PERK_BY, NODE_DEFS, ADJ_RULES, MERGEABLE, SEASON_LEN, Rec,
+  CITY_RANKS, rankBonus, QUESTS,
 } from './data';
 import {
   Game, GameState, BuildingInst, baseMults, newState, initGame, recount, rebuildOccupancy, lvlEff,
@@ -79,6 +80,8 @@ export function recomputeMults(g: Game) {
   if (p.firmHand) m.click *= Math.pow(1.6, p.firmHand);
   if (p.wisdom) m.research *= Math.pow(1.3, p.wisdom);
   if (p.eternalFlame) { m.offlineEff = Math.min(1.2, m.offlineEff + 0.15 * p.eternalFlame); m.offlineCapH += 4 * p.eternalFlame; }
+  if (p.megacity) { m.housing *= Math.pow(1.4, p.megacity); m.growth *= Math.pow(1.3, p.megacity); }
+  if (p.overdrive) m.global *= Math.pow(1.1, p.overdrive);
 
   // nádraží přidává dosah dopravy
   m.haulRange += 15 * countB(g, 'trainStation');
@@ -169,9 +172,14 @@ export function tick(g: Game, dt: number) {
     if (v > 0) gross[r] = (gross[r] || 0) + v;
   };
 
+  // hodnost města (podle populace) — vyšší hodnost = globální bonus produkce
+  let rank = 0;
+  for (let i = CITY_RANKS.length - 1; i >= 0; i--) if (s.pop >= CITY_RANKS[i].pop) { rank = i; break; }
+  if (rank !== g.cityRank) { const up = rank > g.cityRank; g.cityRank = rank; if (up) bus.emit('rank', { rank }); }
+
   // spokojenost (levné, počítá se každý tick)
   computeHappiness(g, festHap);
-  const prodF = (0.5 + 0.5 * g.happiness) * frenzy * m.global;
+  const prodF = (0.5 + 0.5 * g.happiness) * frenzy * m.global * rankBonus(g.cityRank);
 
   // per-typ faktor: doprava × adjacency × úroveň × velká budova × čtvrť (jeden průchod)
   const tf: Record<string, { s: number; n: number }> = {};
@@ -295,6 +303,7 @@ export function tick(g: Game, dt: number) {
   }
 
   g.military = computeMilitary(g);
+  if (g.combo > 0 && Date.now() > g.comboUntil) g.combo = 0;   // klik combo vyprchá
 }
 
 /** obranná síla města: vojáci + hradby + věže + raketové základny (×2 s Velkou zdí) */
@@ -443,6 +452,10 @@ export function slowTick(g: Game, seconds: number, rand: () => number) {
   skyLaserTick(g, seconds, rand);
   // --- nájezdy nepřátel a obrana města ---
   raidTick(g, seconds, rand);
+  // --- cíle, eventy s volbou, historie pro grafy ---
+  questTick(g);
+  choiceTick(g, seconds, rand);
+  recordHistory(g);
 
   // achievementy
   for (const a of ACHS) {
@@ -757,6 +770,55 @@ function resolveRaid(g: Game, rand: () => number) {
     recount(g);
     bus.emit('raidLoss', { strength: raid.strength, burned, stolen });
   }
+}
+
+/** cíle / questy: splněné odmění a oznámí */
+function questTick(g: Game) {
+  const s = g.s;
+  for (const q of QUESTS) {
+    if (s.quests.includes(q.id)) continue;
+    let done = false;
+    try { done = q.cond(g); } catch { done = false; }
+    if (!done) continue;
+    s.quests.push(q.id);
+    for (const [r, v] of Object.entries(q.reward)) s.res[r] = Math.min(capOf(g, r), (s.res[r] || 0) + v);
+    bus.emit('quest', { id: q.id, reward: q.reward });
+  }
+}
+
+/** živá historie pro grafy (ring buffer ~120 vzorků) */
+function recordHistory(g: Game) {
+  const h = g.history;
+  let prod = 0;
+  for (const [r, v] of Object.entries(g.rates)) if (v > 0 && r !== 'research') prod += v;
+  h.pop.push(g.s.pop); h.hap.push(Math.round(g.happiness * 100)); h.prod.push(Math.round(prod * 10) / 10);
+  if (h.pop.length > 120) { h.pop.shift(); h.hap.shift(); h.prod.shift(); }
+}
+
+/** eventy s volbou (občasné rozhodnutí s dopadem) */
+let choicePending = false, choiceCd = 90;
+function choiceTick(g: Game, seconds: number, rand: () => number) {
+  if (choicePending) return;
+  choiceCd -= seconds;
+  if (choiceCd > 0 || g.s.pop < 15 || g.maxEra < 1) return;
+  if (rand() >= seconds / 200) return;
+  choiceCd = 180;
+  const evs: { key: string; opts: { key: string; effect: () => void }[] }[] = [];
+  if ((g.s.res.food || 0) > 120) evs.push({
+    key: 'ev.merchants', opts: [
+      { key: 'ev.accept', effect: () => { g.s.res.food = Math.max(0, (g.s.res.food || 0) - 100); g.s.res.gold = (g.s.res.gold || 0) + 300; } },
+      { key: 'ev.decline', effect: () => {} },
+    ],
+  });
+  evs.push({
+    key: 'ev.wanderers', opts: [
+      { key: 'ev.accept', effect: () => { if (housingCap(g) > g.s.pop) { g.s.pop = Math.min(housingCap(g), g.s.pop + 3); g.runtime.agentsDirty = true; } } },
+      { key: 'ev.decline', effect: () => { g.s.buffs.push({ kind: 'festival', mult: 1, until: Date.now() + 30000, label: '', icon: '🙂' }); } },
+    ],
+  });
+  const ev = evs[Math.floor(rand() * evs.length)];
+  choicePending = true;
+  bus.emit('choiceEvent', { key: ev.key, opts: ev.opts.map(o => ({ key: o.key, cb: () => { o.effect(); choicePending = false; } })) });
 }
 
 function autoAssign(g: Game) {
@@ -1176,12 +1238,17 @@ export function setAssign(g: Game, t: string, n: number) {
 }
 
 // ---------- klik na uzel ----------
-export function gather(g: Game, node: NodeInst): { amt: number; crit: boolean; res: string } | null {
+export function gather(g: Game, node: NodeInst): { amt: number; crit: boolean; res: string; combo: number } | null {
   if (node.stock <= 0) return null;
   const s = g.s;
   const def = NODE_DEFS[node.kind];
   const m = g.m;
-  let amt = m.click * (1 + m.toolPower * Math.min(1, (s.res.tools || 0) / Math.max(1, s.pop * 0.5))) * g.frenzy * g.clickFrenzy;
+  // klik combo: rychlé klikání se řetězí a násobí zisk (až ×2 při 50 comba)
+  const now = Date.now();
+  g.combo = now < g.comboUntil ? Math.min(60, g.combo + 1) : 1;
+  g.comboUntil = now + 2000;
+  const comboMult = 1 + Math.min(50, g.combo) * 0.02;
+  let amt = m.click * (1 + m.toolPower * Math.min(1, (s.res.tools || 0) / Math.max(1, s.pop * 0.5))) * g.frenzy * g.clickFrenzy * comboMult;
   const crit = Math.random() < m.critChance;
   if (crit) amt *= m.critMult;
   if (m.kinetic > 0) amt += m.kinetic * Math.max(0, g.rates[def.res] || 0);
@@ -1192,7 +1259,7 @@ export function gather(g: Game, node: NodeInst): { amt: number; crit: boolean; r
   s.res[def.res] = Math.min(cap, (s.res[def.res] || 0) + amt);
   s.totals[def.res] = (s.totals[def.res] || 0) + amt;
   s.clicks++; s.stats.lifetimeClicks++;
-  return { amt, crit, res: def.res };
+  return { amt, crit, res: def.res, combo: g.combo };
 }
 
 // ---------- technologie a upgrady ----------
@@ -1295,7 +1362,8 @@ export function civScore(g: Game): number {
 }
 
 export function ascendGain(g: Game): number {
-  return Math.floor(Math.sqrt(civScore(g) / 2000));
+  // v0.8: méně štědré early — první Vzestupy dají rozumně málo, hloubka perků drží motivaci
+  return Math.floor(Math.sqrt(civScore(g) / 8000));
 }
 
 export function ascensionUnlocked(g: Game): boolean {
@@ -1313,6 +1381,7 @@ export function buyPerk(g: Game, id: string): string | null {
   if (!def) return 'err.req';
   const lvl = g.s.legacy.perks[id] || 0;
   if (lvl >= def.max) return 'err.max';
+  if (def.reqAsc && (g.s.stats.ascensions || 0) < def.reqAsc) return 'err.asc';
   const cost = perkCost(g, id);
   if (g.s.legacy.pts < cost) return 'err.legacy';
   g.s.legacy.pts -= cost;

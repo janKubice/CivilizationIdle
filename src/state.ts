@@ -44,6 +44,7 @@ export interface GameState {
   techs: string[];
   upgrades: Rec;                     // id -> level
   achs: string[];
+  quests: string[];                  // splněné cíle
   clicks: number;
   buffs: Buff[];
   auto: Record<string, boolean>;     // Guvernér: auto-stavění (food/wood/store/water)
@@ -89,6 +90,9 @@ export interface Game {
   seasonT: number;                   // postup v období 0..1
   cold: boolean;                     // zima bez dřeva na topení
   military: number;                  // obranná síla města (kasárna, hradby, věže, raketové základny)
+  cityRank: number;                  // hodnost města (index do CITY_RANKS)
+  combo: number; comboUntil: number; // klik combo (juice, runtime)
+  history: { pop: number[]; hap: number[]; prod: number[] };  // pro grafy (runtime, ring buffer)
   runtime: {
     golden: GoldenCitizen | null;
     buildSel: string | null;
@@ -113,6 +117,8 @@ export function newState(seed: number, carry?: { legacy: GameState['legacy']; ac
   // perky ovlivňující start
   const her = legacy.perks.heritage || 0;
   if (her > 0) { res.wood += 200 * her; res.food += 200 * her; res.stone += 200 * her; }
+  const wc = legacy.perks.warChest || 0;
+  if (wc > 0) res.gold = (res.gold || 0) + 500 * wc;
   const techs: string[] = [];
   if ((legacy.perks.headStart || 0) > 0) { techs.push('stoneTools', 'basketry', 'hunting'); res.research = 100; }
 
@@ -135,6 +141,7 @@ export function newState(seed: number, carry?: { legacy: GameState['legacy']; ac
     techs,
     upgrades: {},
     achs: carry?.achs ?? [],
+    quests: [],
     clicks: 0,
     buffs: [],
     auto: {},
@@ -193,6 +200,8 @@ export function initGame(g: Game, s: GameState) {
   g.maxEra = 0;
   g.season = 0; g.seasonT = 0; g.cold = false;
   g.military = 0;
+  g.cityRank = 0; g.combo = 0; g.comboUntil = 0;
+  g.history = { pop: [], hap: [], prod: [] };
   g.runtime = { golden: null, buildSel: null, paused: true, hint: '', agentsDirty: true, started: false, raid: null };
   recount(g);
   rebuildOccupancy(g);
@@ -233,7 +242,7 @@ function computeDistricts(g: Game) {
       if (o === b || B[o.t].cat !== cat) continue;
       if (Math.max(Math.abs(o.x - b.x), Math.abs(o.y - b.y)) <= 4) near += o.big ? 4 : 1;
     }
-    const dm = near >= 5 ? 1.25 : near >= 2 ? 1.15 : undefined;
+    const dm = near >= 25 ? 1.6 : near >= 12 ? 1.4 : near >= 5 ? 1.25 : near >= 2 ? 1.15 : undefined;
     if (dm) b.dm = dm; else delete b.dm;
   }
 }

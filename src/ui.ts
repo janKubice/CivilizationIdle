@@ -1,7 +1,7 @@
 // ===== UI vrstva: HUD, panely, menu, modaly (vanilla DOM, čte stav, posílá příkazy) =====
 
 import { fmt, fmtRate, fmtTime, bus } from './util';
-import { RES, RES_BY, B, BUILDINGS, TECHS, TECH_BY, UPGRADES, ACHS, PERKS, SEASON_ICONS, BCat, Rec } from './data';
+import { RES, RES_BY, B, BUILDINGS, TECHS, TECH_BY, UPGRADES, ACHS, PERKS, SEASON_ICONS, BCat, Rec, CITY_RANKS, QUESTS, rankBonus } from './data';
 import { Game, slots, sumAssigned, housingCap, waterCap, capOf } from './state';
 import {
   buildCost, canAfford, upgradeCost, buyTech, buyUpgrade, setAssign, hasTech, techAvailable,
@@ -207,8 +207,10 @@ const PANELS: PanelDef[] = [
   { id: 'build', icon: '🏗️', render: renderBuild },
   { id: 'work', icon: '👷', render: renderWork },
   { id: 'store', icon: '📦', render: renderStorage },
+  { id: 'quest', icon: '🎯', render: renderQuests },
   { id: 'tech', icon: '🔬', render: renderTech, show: () => (g.bCount.library || 0) > 0 || g.s.techs.length > 0 },
   { id: 'upg', icon: '💡', render: renderUpgrades, show: () => g.s.techs.length > 0 },
+  { id: 'stats', icon: '📊', render: renderStats },
   { id: 'ach', icon: '🏆', render: renderAchs },
   { id: 'asc', icon: '✨', render: renderAscension, show: () => g.maxEra >= 5 || (g.s.stats.ascensions || 0) > 0 || ascensionUnlocked(g) },
 ];
@@ -483,6 +485,61 @@ function renderAchs() {
   pbody.appendChild(grid);
 }
 
+// --- Cíle / questy ---
+function renderQuests() {
+  pbody.innerHTML = '';
+  pbody.appendChild(el('div', 'idlebox', `<span>${t('quest.head', g.s.quests.length, QUESTS.length)}</span>`));
+  for (const q of QUESTS) {
+    const got = g.s.quests.includes(q.id);
+    const rew = Object.entries(q.reward).map(([r, v]) => `${RES_BY[r]?.icon || ''}${fmt(v)}`).join(' ');
+    const card = el('div', 'card' + (got ? ' owned' : ''));
+    card.innerHTML = `<h4>${q.icon} ${esc(t('quest.' + q.id))} ${got ? '<span class="badge">✓</span>' : ''}</h4>
+      <div class="desc">${t('quest.reward', rew)}</div>`;
+    pbody.appendChild(card);
+  }
+}
+
+// --- Statistiky + grafy ---
+function miniChart(title: string, data: number[], color: string, maxY?: number) {
+  const wrap = el('div', 'card');
+  wrap.innerHTML = `<h4 style="font-size:12px;opacity:.85">${title}</h4>`;
+  const cv = document.createElement('canvas');
+  cv.width = 280; cv.height = 68; cv.style.width = '100%'; cv.style.height = '68px'; cv.style.borderRadius = '6px';
+  wrap.appendChild(cv);
+  const x = cv.getContext('2d')!;
+  x.fillStyle = '#0d1420'; x.fillRect(0, 0, cv.width, cv.height);
+  if (data.length > 1) {
+    const mx = maxY || Math.max(1, ...data);
+    x.strokeStyle = color; x.lineWidth = 1.6; x.beginPath();
+    for (let i = 0; i < data.length; i++) {
+      const px = (i / (data.length - 1)) * cv.width;
+      const py = cv.height - 3 - (data[i] / mx) * (cv.height - 8);
+      i === 0 ? x.moveTo(px, py) : x.lineTo(px, py);
+    }
+    x.stroke();
+    x.globalAlpha = 0.14; x.lineTo(cv.width, cv.height); x.lineTo(0, cv.height); x.closePath(); x.fillStyle = color; x.fill(); x.globalAlpha = 1;
+    x.fillStyle = color; x.font = 'bold 11px sans-serif'; x.textAlign = 'right'; x.fillText(fmt(data[data.length - 1]), cv.width - 4, 12);
+  } else { x.fillStyle = '#5a6572'; x.font = '11px sans-serif'; x.textAlign = 'center'; x.fillText(t('stats.wait'), cv.width / 2, cv.height / 2); }
+  pbody.appendChild(wrap);
+}
+
+function renderStats() {
+  pbody.innerHTML = '';
+  pbody.appendChild(el('div', 'idlebox', `<span>${t('stats.head')}</span>`));
+  const sum = el('div', 'card');
+  sum.innerHTML = `<div class="desc" style="line-height:1.9;font-size:13px">
+    ${CITY_RANKS[g.cityRank].icon} <b>${esc(t('rank.' + g.cityRank))}</b> — ${t('stats.rankBonus', Math.round((rankBonus(g.cityRank) - 1) * 100))}<br>
+    ⏱️ ${t('stats.playtime', fmtTime(g.s.playtime / 1000))}<br>
+    👆 ${t('stats.clicks', fmt(g.s.stats.lifetimeClicks))}<br>
+    👥 ${t('stats.peak', fmt(g.s.stats.peakPop))}<br>
+    🏗️ ${t('stats.buildings', fmt(g.s.buildings.length))}<br>
+    ⚔️ ${t('stats.military', fmt(g.military))} · ✨ ${t('stats.asc', g.s.stats.ascensions || 0)}</div>`;
+  pbody.appendChild(sum);
+  miniChart(`👥 ${t('stats.popG')}`, g.history.pop, '#8fb8ff');
+  miniChart(`😊 ${t('stats.hapG')}`, g.history.hap, '#7ee787', 100);
+  miniChart(`📈 ${t('stats.prodG')}`, g.history.prod, '#ffd74a');
+}
+
 // --- Vzestup ---
 function renderAscension() {
   pbody.innerHTML = '';
@@ -513,10 +570,12 @@ function renderAscension() {
   for (const p of PERKS) {
     const lvl = g.s.legacy.perks[p.id] || 0;
     const maxed = lvl >= p.max;
-    const card = el('div', 'card' + (maxed ? ' owned' : ''));
-    card.innerHTML = `<h4>${p.icon} ${esc(tn('perk', p.id))} <span class="badge">${lvl}/${p.max}</span></h4>
-      <div class="desc">${esc(td('perk', p.id))}</div>`;
-    if (!maxed) {
+    const locked = p.reqAsc && (g.s.stats.ascensions || 0) < p.reqAsc;
+    const maxLbl = p.max > 99 ? '∞' : p.max;
+    const card = el('div', 'card' + (maxed ? ' owned' : locked ? ' locked' : ''));
+    card.innerHTML = `<h4>${p.icon} ${esc(tn('perk', p.id))} <span class="badge">${lvl}/${maxLbl}</span></h4>
+      <div class="desc">${esc(td('perk', p.id))}</div>${locked ? `<div class="desc">🔒 ${t('perk.reqAsc', p.reqAsc || 0)}</div>` : ''}`;
+    if (!maxed && !locked) {
       const cost = perkCost(g, p.id);
       card.innerHTML += `<div class="cost"><span class="${g.s.legacy.pts >= cost ? 'ok' : 'no'}">✨${cost}</span></div>`;
       const btn2 = el('button', '', t('upg.buy')) as HTMLButtonElement;
@@ -622,7 +681,7 @@ function showSettings() {
 
 // ---------- top bar ----------
 const chipEls = new Map<string, { root: HTMLElement; amt: HTMLElement; rate: HTMLElement; bar: HTMLElement }>();
-let popChip: HTMLElement, hapChip: HTMLElement, waterChip: HTMLElement, energyChip: HTMLElement, milChip: HTMLElement, eraChip: HTMLElement, seasonChip: HTMLElement, buffWrap: HTMLElement;
+let popChip: HTMLElement, hapChip: HTMLElement, waterChip: HTMLElement, energyChip: HTMLElement, milChip: HTMLElement, rankChip: HTMLElement, eraChip: HTMLElement, seasonChip: HTMLElement, buffWrap: HTMLElement;
 let raidBanner: HTMLElement;
 const ERA_ICONS = ['🪨', '🥉', '🏛️', '🏰', '🏭', '🏙️', '🚀'];
 const BUFF_KEY: Record<string, string> = { frenzy: 'buff.frenzy', clickFrenzy: 'buff.click', festival: 'buff.festival' };
@@ -683,6 +742,8 @@ function updateTopbar() {
     milChip.classList.toggle('warn', !!raid && g.military < raid.strength);
     milChip.title = t('top.military');
   } else milChip.style.display = 'none';
+  rankChip.innerHTML = `${CITY_RANKS[g.cityRank].icon} <b>${esc(t('rank.' + g.cityRank))}</b>`;
+  rankChip.title = t('top.rank', Math.round((rankBonus(g.cityRank) - 1) * 100));
   eraChip.innerHTML = `${ERA_ICONS[g.maxEra]} <b>${tera(g.maxEra)}</b>`;
   eraChip.title = t('top.era');
   seasonChip.innerHTML = `${SEASON_ICONS[g.season]} ${t('season.' + g.season)}`;
@@ -719,16 +780,21 @@ export function initUI(game: Game, opts: { renderer: Renderer; onNewGame: () => 
 
   topbar = el('div'); topbar.id = 'topbar'; ui.appendChild(topbar);
   buffWrap = el('span');
-  popChip = el('span', 'chip'); hapChip = el('span', 'chip'); waterChip = el('span', 'chip'); energyChip = el('span', 'chip'); milChip = el('span', 'chip'); eraChip = el('span', 'chip'); seasonChip = el('span', 'chip');
+  popChip = el('span', 'chip'); hapChip = el('span', 'chip'); waterChip = el('span', 'chip'); energyChip = el('span', 'chip'); milChip = el('span', 'chip'); rankChip = el('span', 'chip'); eraChip = el('span', 'chip'); seasonChip = el('span', 'chip');
   energyChip.style.display = 'none'; waterChip.style.display = 'none'; milChip.style.display = 'none';
   hapChip.style.cursor = 'pointer';
   hapChip.onclick = () => showHapBreakdown();
-  topbar.appendChild(popChip); topbar.appendChild(waterChip); topbar.appendChild(hapChip); topbar.appendChild(energyChip); topbar.appendChild(milChip); topbar.appendChild(eraChip); topbar.appendChild(seasonChip);
+  rankChip.style.cursor = 'pointer';
+  rankChip.onclick = () => openPanel('stats');
+  topbar.appendChild(popChip); topbar.appendChild(waterChip); topbar.appendChild(hapChip); topbar.appendChild(energyChip); topbar.appendChild(milChip); topbar.appendChild(rankChip); topbar.appendChild(eraChip); topbar.appendChild(seasonChip);
   topbar.appendChild(buffWrap);
   topbar.appendChild(el('span', 'spacer'));
   const home = el('button', 'iconbtn', '🏠') as HTMLButtonElement;
   home.onclick = () => { renderer.cam.x = 0; renderer.cam.y = 0; };
   topbar.appendChild(home);
+  const overview = el('button', 'iconbtn', '🔭') as HTMLButtonElement;
+  overview.onclick = () => { renderer.cam.x = 0; renderer.cam.y = 0; renderer.cam.z = renderer.cam.z <= 0.3 ? 1 : 0.18; };
+  topbar.appendChild(overview);
   const mute = el('button', 'iconbtn', g.s.settings.muted ? '🔇' : '🔊') as HTMLButtonElement;
   mute.onclick = () => {
     g.s.settings.muted = !g.s.settings.muted;
@@ -819,6 +885,16 @@ export function initUI(game: Game, opts: { renderer: Renderer; onNewGame: () => 
     const parts = Object.entries(e.stolen as Rec).map(([r, v]) => `${RES_BY[r]?.icon || ''}${fmt(v as number)}`).join(' ');
     toast(t('toast.raidLoss', e.burned, parts || '—'), 'ach');
   });
+  bus.on('rank', (e: any) => toast(t('toast.rank', esc(t('rank.' + e.rank))), 'gold'));
+  bus.on('quest', (e: any) => {
+    const rew = Object.entries(e.reward as Rec).map(([r, v]) => `${RES_BY[r]?.icon || ''}${fmt(v as number)}`).join(' ');
+    toast(t('toast.quest', esc(t('quest.' + e.id)), rew), 'gold');
+    if (openedPanel === 'quest') refreshPanel();
+  });
+  bus.on('choiceEvent', (e: any) => {
+    showModal(`<h3>${t(e.key + '.t')}</h3><p>${t(e.key + '.d')}</p>`,
+      e.opts.map((o: any) => ({ label: t(o.key), cb: o.cb })));
+  });
   bus.on('meteor', (e: any) => toast(t('toast.meteor', fmt(e.amt), esc(tres(e.res))), 'gold'));
   bus.on('govBuilt', (e: any) => {
     const now2 = Date.now();
@@ -866,6 +942,6 @@ export function uiFrame(dt: number) {
   slowPanelTimer -= dt;
   if (slowPanelTimer <= 0) {
     slowPanelTimer = 2;
-    if (openedPanel === 'build' || openedPanel === 'upg') refreshPanel();
+    if (openedPanel === 'build' || openedPanel === 'upg' || openedPanel === 'stats' || openedPanel === 'quest') refreshPanel();
   }
 }

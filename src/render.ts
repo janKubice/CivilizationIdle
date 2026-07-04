@@ -79,6 +79,7 @@ export class Renderer {
       const wx = e.tx * TILE + TILE / 2, wy = e.ty * TILE + TILE / 2;
       this.float(wx, wy, `+${fmt(e.amt)}`, RES_BY[e.res]?.color || '#fff', e.crit);
       if (this.g.s.settings.particles) this.burst(wx, wy, RES_BY[e.res]?.color || '#fff', e.crit ? 14 : 6);
+      if (e.combo >= 5 && e.combo % 5 === 0) this.float(wx + 14, wy - 14, `🔥 ${e.combo}× combo`, '#ff9840', e.combo >= 20);
     });
     bus.on('built', (e: any) => {
       const wx = e.x * TILE + TILE / 2, wy = e.y * TILE + TILE / 2;
@@ -125,6 +126,12 @@ export class Renderer {
     bus.on('raidLoss', () => {
       for (let i = 0; i < 46; i++) this.burst((Math.random() - 0.5) * 110, (Math.random() - 0.5) * 110, i % 2 ? '#ff4a3a' : '#555555', 2);
       this.float(0, -24, '💀 ✦ 💀', '#ff7b72', true);
+    });
+    // povýšení hodnosti města — velkolepý ohňostroj nad městem
+    bus.on('rank', () => {
+      const cols = ['#ffd74a', '#7ee787', '#8fb8ff', '#ff8fd8', '#ffffff'];
+      for (let i = 0; i < 60; i++) this.burst((Math.random() - 0.5) * 160, -30 + (Math.random() - 0.5) * 120, cols[i % 5], 2);
+      this.float(0, -30, '★ ★ ★', '#ffd74a', true);
     });
   }
 

@@ -179,6 +179,10 @@ export const TECHS: TDef[] = [
   { id: 'terraforming', name: 'Terraforming', desc: 'Odemyká Terraformovací věž — přetvoř vodu, hory i poušť v úrodnou zem. 🌐', era: 6, cost: 900000, mats: { machinery: 80 }, req: ['spaceProgram'], fx: { unlock: ['terraformer'] } },
   { id: 'orbitalLasers', name: 'Orbitální lasery', desc: 'Lasery z nebe! Družice pravidelně zasáhnou zem a nadělí obří kořist. Klik ×2. 🔴🛰️', era: 6, cost: 1200000, mats: { electronics: 150 }, req: ['spaceProgram', 'laserMining'], fx: { click: 2, special: 'orbital' } },
 ];
+// rebalanc v0.8: pozdní éry stojí víc, ať cesta k endgame trvá (early hry se nedotýká)
+const TECH_ERA_MULT: Record<number, number> = { 4: 2, 5: 2.6, 6: 3.4 };
+for (const t of TECHS) { const m = TECH_ERA_MULT[t.era]; if (m) t.cost = Math.round(t.cost * m); }
+
 export const TECH_BY: Record<string, TDef> = Object.fromEntries(TECHS.map(t => [t.id, t]));
 
 // ---------- Upgrady ----------
@@ -252,14 +256,17 @@ export const ACHS: AchDef[] = [
 ];
 
 // ---------- Ascension perky ----------
-export interface PerkDef { id: string; name: string; icon: string; desc: string; max: number; baseCost: number; costGrowth: number }
+export interface PerkDef { id: string; name: string; icon: string; desc: string; max: number; baseCost: number; costGrowth: number; reqAsc?: number }
 export const PERKS: PerkDef[] = [
-  { id: 'prosperity', name: 'Prosperita', icon: '🌟', desc: 'Veškerá produkce ×1,25 za úroveň.', max: 10, baseCost: 1, costGrowth: 2 },
-  { id: 'firmHand', name: 'Pevná ruka', icon: '💪', desc: 'Klik ×1,6 za úroveň.', max: 5, baseCost: 1, costGrowth: 2 },
-  { id: 'wisdom', name: 'Učenost', icon: '📜', desc: 'Věda ×1,3 za úroveň.', max: 5, baseCost: 1, costGrowth: 2 },
-  { id: 'heritage', name: 'Zásoby předků', icon: '🎁', desc: 'Start s +200 dřeva/jídla/kamene a +2 obyvateli za úroveň.', max: 3, baseCost: 2, costGrowth: 2 },
-  { id: 'eternalFlame', name: 'Věčný oheň', icon: '🔥', desc: 'Offline efektivita +15 % a limit +4 h za úroveň.', max: 3, baseCost: 2, costGrowth: 2 },
+  { id: 'prosperity', name: 'Prosperita', icon: '🌟', desc: 'Veškerá produkce ×1,25 za úroveň.', max: 25, baseCost: 1, costGrowth: 1.6 },
+  { id: 'firmHand', name: 'Pevná ruka', icon: '💪', desc: 'Klik ×1,6 za úroveň.', max: 12, baseCost: 1, costGrowth: 1.7 },
+  { id: 'wisdom', name: 'Učenost', icon: '📜', desc: 'Věda ×1,3 za úroveň.', max: 12, baseCost: 1, costGrowth: 1.7 },
+  { id: 'heritage', name: 'Zásoby předků', icon: '🎁', desc: 'Start s +200 dřeva/jídla/kamene a +2 obyvateli za úroveň.', max: 10, baseCost: 2, costGrowth: 1.8 },
+  { id: 'eternalFlame', name: 'Věčný oheň', icon: '🔥', desc: 'Offline efektivita +15 % a limit +4 h za úroveň.', max: 5, baseCost: 2, costGrowth: 1.9 },
   { id: 'headStart', name: 'Rychlý rozjezd', icon: '🚀', desc: 'Začínáš s technologiemi doby kamenné a 100 vědy.', max: 1, baseCost: 3, costGrowth: 1 },
+  { id: 'warChest', name: 'Válečná pokladna', icon: '💰', desc: 'Začínáš s +500 zlata za úroveň.', max: 10, baseCost: 2, costGrowth: 1.8 },
+  { id: 'megacity', name: 'Megaměsto', icon: '🌃', desc: 'Bydlení +40 % a růst ×1,3 za úroveň. (Vyžaduje 3 Vzestupy)', max: 10, baseCost: 4, costGrowth: 1.8, reqAsc: 3 },
+  { id: 'overdrive', name: 'Přetlak', icon: '⚡', desc: 'Veškerá produkce ×1,1 za úroveň — donekonečna. (Vyžaduje 5 Vzestupů)', max: 999, baseCost: 8, costGrowth: 1.25, reqAsc: 5 },
 ];
 export const PERK_BY: Record<string, PerkDef> = Object.fromEntries(PERKS.map(p => [p.id, p]));
 
@@ -279,6 +286,37 @@ export const N_TREE = 0, N_BERRY = 1, N_ROCK = 2, N_COPPER = 3, N_IRON = 4, N_CO
 // roční období: délka jednoho v sekundách herního času
 export const SEASON_LEN = 360;
 export const SEASON_ICONS = ['🌸', '☀️', '🍂', '❄️'];
+
+// ---------- Hodnosti města (podle populace) ----------
+export interface CityRank { pop: number; icon: string }
+export const CITY_RANKS: CityRank[] = [
+  { pop: 0, icon: '🏕️' },       // Osada
+  { pop: 30, icon: '🏘️' },      // Vesnice
+  { pop: 150, icon: '🏙️' },     // Město
+  { pop: 800, icon: '🌆' },      // Velkoměsto
+  { pop: 4000, icon: '🌃' },     // Metropole
+  { pop: 20000, icon: '🛸' },    // Megapole
+  { pop: 100000, icon: '🌌' },   // Ekumenopolis
+];
+/** globální bonus produkce podle hodnosti (kumulativně +8 % na hodnost) */
+export const rankBonus = (rank: number) => 1 + 0.08 * rank;
+
+// ---------- Cíle / questy (early-game háčky) ----------
+export interface QuestDef { id: string; icon: string; reward: Rec; cond: (g: any) => boolean }
+export const QUESTS: QuestDef[] = [
+  { id: 'q_wood', icon: '🪵', reward: { wood: 40 }, cond: g => (g.s.totals.wood || 0) >= 40 },
+  { id: 'q_hut', icon: '🛖', reward: { wood: 30, stone: 20 }, cond: g => (g.bCount.hut || 0) + (g.bCount.house || 0) >= 1 },
+  { id: 'q_camp', icon: '🪓', reward: { food: 40 }, cond: g => (g.bCount.forestCamp || 0) + (g.bCount.gatherHut || 0) >= 1 },
+  { id: 'q_assign', icon: '👷', reward: { gold: 15 }, cond: g => { let n = 0; for (const v of Object.values(g.s.assigned)) n += v as number; return n >= 1; } },
+  { id: 'q_library', icon: '📚', reward: { research: 25 }, cond: g => (g.bCount.library || 0) >= 1 },
+  { id: 'q_tech', icon: '🔬', reward: { research: 60 }, cond: g => g.s.techs.length >= 1 },
+  { id: 'q_pop25', icon: '👥', reward: { gold: 60 }, cond: g => g.s.pop >= 25 },
+  { id: 'q_market', icon: '🏪', reward: { gold: 120 }, cond: g => (g.bCount.market || 0) >= 1 },
+  { id: 'q_golden', icon: '🌟', reward: { gold: 250 }, cond: g => (g.s.stats.goldenClicked || 0) >= 1 },
+  { id: 'q_district', icon: '🏘️', reward: { gold: 300 }, cond: g => g.s.buildings.some((b: any) => b.dm && b.dm > 1) },
+  { id: 'q_era', icon: '🏭', reward: { gold: 2000 }, cond: g => g.maxEra >= 4 },
+  { id: 'q_wonder', icon: '🗼', reward: { gold: 5000 }, cond: g => g.s.buildings.some((b: any) => B[b.t]?.wonder && !b.build) },
+];
 
 /** budovy, které jde sloučit 4-v-1 do "velké budovy" (2×2, +50 % výkon) */
 export const MERGEABLE = new Set(['farm', 'hut', 'house', 'aptBlock', 'towerBlock', 'forestCamp', 'gatherHut', 'quarry', 'sawmill', 'copperMine', 'ironMine', 'coalMine', 'library', 'market', 'brickworks', 'smelter', 'ironworks', 'steelworks']);
