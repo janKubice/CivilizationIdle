@@ -25,13 +25,14 @@ interface Bird { x: number; y: number; vx: number; ph: number }
 interface Train { path: [number, number][]; dist: number; dir: 1 | -1; pause: number; len: number }
 interface Flake { x: number; y: number; vy: number; vx: number; ph: number }
 interface Heli { x: number; y: number; tx: number; ty: number; rot: number }
+interface Car { tx: number; ty: number; ntx: number; nty: number; t: number; px: number; py: number; kind: 'car' | 'truck'; color: string; speed: number }
 
 const AGENT_COLORS: Record<string, string> = {
   forestCamp: '#4a8040', gatherHut: '#c9a83e', quarry: '#8d939c', farm: '#7fb356',
   copperMine: '#e08d4f', ironMine: '#c8cdd8', coalMine: '#454a52', sawmill: '#c08a4e',
   smelter: '#e88a2a', workshop: '#e8c46a', market: '#ffd777', library: '#8fb8ff',
   ironworks: '#a8adba', brickworks: '#c4593e', steelworks: '#c8d2e0', powerPlant: '#ffe14a',
-  factory: '#9fb4d8', hitechLab: '#6fd8c8', trainStation: '#b8a97e', idle: '#d8c8b0',
+  factory: '#9fb4d8', hitechLab: '#6fd8c8', trainStation: '#b8a97e', nuclearPlant: '#3fcf6a', idle: '#d8c8b0',
 };
 
 const NODE_SPRITES = ['tree', 'berry', 'rock', 'copperVein', 'ironVein', 'coalVein', 'fishShoal'];
@@ -52,7 +53,8 @@ export class Renderer {
   private birds: Bird[] = [];
   private birdTimer = 8;
   private trains: Train[] = [];
-  private trainStations = -1;
+  private trainRoutes = -1;
+  private cars: Car[] = [];
   private precip: Flake[] = [];
   private agentSync = 0;
   private mini: HTMLCanvasElement | null = null;
@@ -93,11 +95,18 @@ export class Renderer {
     });
     bus.on('ascend', () => this.reset());
     bus.on('worldReset', () => this.reset());
+    bus.on('wonderDone', (e: any) => {
+      const wx = (e.x + 1.5) * TILE, wy = (e.y + 1.5) * TILE;
+      const cols = ['#ffd74a', '#ff6a6a', '#6fd8c8', '#8fb8ff', '#ffffff'];
+      for (let i = 0; i < 70; i++) this.burst(wx + (Math.random() - 0.5) * 150, wy - 30 + (Math.random() - 0.5) * 130, cols[i % 5], 2);
+      this.float(wx, wy - 40, '✨ ★ ✨', '#ffd74a', true);
+    });
   }
 
   reset() {
     this.chunkCache.clear();
     this.particles.length = 0; this.floats.length = 0; this.agentMap.clear(); this.helis.length = 0;
+    this.cars.length = 0; this.trains.length = 0; this.trainRoutes = -1;
     this.cam.x = 0; this.cam.y = 0; this.cam.z = 1;
   }
 
@@ -329,6 +338,57 @@ export class Renderer {
     return [this.cam.x - hw, this.cam.y - hh, this.cam.x + hw, this.cam.y + hh];
   }
 
+  private roadNeighbors(g: Game, tx: number, ty: number): [number, number][] {
+    const out: [number, number][] = [];
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) if (g.world.roads.has(key(tx + dx, ty + dy))) out.push([tx + dx, ty + dy]);
+    return out;
+  }
+
+  // auta a náklaďáky brázdí silnice (odemčeno technologií Automobilismus)
+  private syncCars(g: Game) {
+    if (!hasTech(g.s, 'automobiles')) { this.cars.length = 0; return; }
+    const view = this.viewBounds(1.15);
+    this.cars = this.cars.filter(cr => cr.px > view[0] - 300 && cr.px < view[2] + 300 && cr.py > view[1] - 300 && cr.py < view[3] + 300);
+    const want = Math.min(9, 2 + Math.floor((g.s.pop || 0) / 60));
+    const roads = [...g.world.roads];
+    let guard = 0;
+    while (this.cars.length < want && guard++ < 60 && roads.length) {
+      const [tx, ty] = roads[(Math.random() * roads.length) | 0].split(',').map(Number);
+      const wx = (tx + 0.5) * TILE, wy = (ty + 0.5) * TILE;
+      if (wx < view[0] || wx > view[2] || wy < view[1] || wy > view[3]) continue;
+      const nb = this.roadNeighbors(g, tx, ty);
+      if (!nb.length) continue;
+      const [ntx, nty] = nb[(Math.random() * nb.length) | 0];
+      const truck = Math.random() < 0.4;
+      this.cars.push({
+        tx, ty, ntx, nty, t: Math.random(), px: wx, py: wy, kind: truck ? 'truck' : 'car',
+        color: truck ? ['#3a5b96', '#8a5a2a', '#5a6b52', '#b8b8c0'][(Math.random() * 4) | 0]
+          : ['#c8352a', '#e0b93a', '#3a7ac8', '#d8d8d8', '#37373f', '#3fa05a'][(Math.random() * 6) | 0],
+        speed: truck ? 34 : 54,
+      });
+    }
+  }
+
+  private updateCars(g: Game, dt: number) {
+    for (const cr of this.cars) {
+      const p0x = (cr.tx + 0.5) * TILE, p0y = (cr.ty + 0.5) * TILE;
+      const p1x = (cr.ntx + 0.5) * TILE, p1y = (cr.nty + 0.5) * TILE;
+      const segLen = Math.hypot(p1x - p0x, p1y - p0y) || 1;
+      cr.t += (cr.speed * dt) / segLen;
+      if (cr.t >= 1) {
+        const fromTx = cr.tx, fromTy = cr.ty;
+        cr.tx = cr.ntx; cr.ty = cr.nty; cr.t = 0;
+        cr.px = (cr.tx + 0.5) * TILE; cr.py = (cr.ty + 0.5) * TILE;
+        const dirx = cr.tx - fromTx, diry = cr.ty - fromTy;
+        let nb = this.roadNeighbors(g, cr.tx, cr.ty).filter(([nx, ny]) => !(nx === fromTx && ny === fromTy));
+        if (!nb.length) nb = [[fromTx, fromTy]];               // slepá ulice → otoč
+        const straight = nb.find(([nx, ny]) => nx === cr.tx + dirx && ny === cr.ty + diry);
+        const pick = straight && Math.random() < 0.72 ? straight : nb[(Math.random() * nb.length) | 0];
+        cr.ntx = pick[0]; cr.nty = pick[1];
+      } else { cr.px = lerp(p0x, p1x, cr.t); cr.py = lerp(p0y, p1y, cr.t); }
+    }
+  }
+
   // ---------- hlavní frame ----------
   frame(g: Game, dt: number, now: number) {
     const x = this.ctx;
@@ -359,7 +419,12 @@ export class Renderer {
       visRoads.push([tx, ty]);
     }
     const hasRoad = (tx: number, ty: number) => g.world.roads.has(key(tx, ty));
-    for (const pass of [{ inset: 5, col: '#8a7a58' }, { inset: 8, col: '#b0a077' }]) {
+    // moderní éra: asfaltové silnice s dělicí čárou
+    const modernRoads = g.maxEra >= 4;
+    const passes = modernRoads
+      ? [{ inset: 4, col: '#33363d' }, { inset: 7, col: '#44484f' }]
+      : [{ inset: 5, col: '#8a7a58' }, { inset: 8, col: '#b0a077' }];
+    for (const pass of passes) {
       x.fillStyle = pass.col;
       const ins = pass.inset * z, core = (TILE - 2 * pass.inset) * z;
       for (const [tx, ty] of visRoads) {
@@ -369,6 +434,17 @@ export class Renderer {
         if (hasRoad(tx - 1, ty)) x.fillRect(sx - 0.25, sy + ins, ins, core);
         if (hasRoad(tx, ty + 1)) x.fillRect(sx + ins, sy + ins + core, core, ins * 2 + 0.5);
         if (hasRoad(tx, ty - 1)) x.fillRect(sx + ins, sy - 0.25, core, ins);
+      }
+    }
+    if (modernRoads && z > 0.55) {
+      x.fillStyle = '#d8c86a';
+      const T = TILE * z, mid = T / 2, dl = T * 0.22, dw = Math.max(1, 1.4 * z);
+      for (const [tx, ty] of visRoads) {
+        const [sx, sy] = this.worldToScreen(tx * TILE, ty * TILE);
+        const h = hasRoad(tx + 1, ty) || hasRoad(tx - 1, ty);
+        const v = hasRoad(tx, ty + 1) || hasRoad(tx, ty - 1);
+        if (h && !v) { x.fillRect(sx + T * 0.16, sy + mid - dw / 2, dl, dw); x.fillRect(sx + T * 0.62, sy + mid - dw / 2, dl, dw); }
+        else if (v && !h) { x.fillRect(sx + mid - dw / 2, sy + T * 0.16, dw, dl); x.fillRect(sx + mid - dw / 2, sy + T * 0.62, dw, dl); }
       }
     }
 
@@ -426,11 +502,25 @@ export class Renderer {
       const size = b.big ? 2 : def.size;
       const sp = (b.big && sprites['big:' + b.t]) || sprites[b.t];
       if (!sp) continue;
-      const sh = size === 2 ? 80 : 44;
+      const sh = size === 3 ? 132 : size === 2 ? 80 : 44;
       const [sx, sy] = this.worldToScreen(b.x * TILE, b.y * TILE - (sh - size * TILE));
+      const building = !!b.build;
       if (b.dmg) x.globalAlpha = 0.45;
+      else if (building) x.globalAlpha = 0.5;
       x.drawImage(sp, sx, sy, size * TILE * z, sh * z);
       x.globalAlpha = 1;
+      // Div světa se staví: lešení + ukazatel postupu
+      if (building) {
+        const w = size * TILE * z, h = sh * z;
+        x.strokeStyle = '#b8894a'; x.lineWidth = Math.max(1, 1.2 * z);
+        for (let i = 0; i <= 3; i++) { const px = sx + w * (i / 3); x.beginPath(); x.moveTo(px, sy + h * 0.28); x.lineTo(px, sy + h); x.stroke(); }
+        for (let i = 1; i < 4; i++) { const py = sy + h * (0.28 + 0.72 * i / 4); x.beginPath(); x.moveTo(sx, py); x.lineTo(sx + w, py); x.stroke(); }
+        const prog = def.buildTime ? clamp(1 - b.build! / def.buildTime, 0, 1) : 0;
+        x.fillStyle = '#00000090'; x.fillRect(sx, sy - 9 * z, w, 4.5 * z);
+        x.fillStyle = '#ffd74a'; x.fillRect(sx, sy - 9 * z, w * prog, 4.5 * z);
+        x.font = `${Math.round(11 * z)}px sans-serif`; x.textAlign = 'center'; x.fillStyle = '#fff';
+        x.fillText('🏗️', sx + w / 2, sy - 13 * z);
+      }
       // hořící budova: záře + plameny
       if (b.fire) {
         const cx2 = b.x * TILE + size * TILE / 2, cy2 = b.y * TILE + size * TILE / 2;
@@ -488,7 +578,7 @@ export class Renderer {
         const [sx, sy] = this.worldToScreen(this.mouse.tx * TILE, this.mouse.ty * TILE);
         x.fillStyle = ok ? '#3fb95040' : '#ff4a4a40';
         x.fillRect(sx, sy, def.size * TILE * z, def.size * TILE * z);
-        const sh = def.size === 2 ? 80 : 44;
+        const sh = def.size === 3 ? 132 : def.size === 2 ? 80 : 44;
         x.globalAlpha = 0.65;
         x.drawImage(sp, sx, sy - (sh - def.size * TILE) * z, def.size * TILE * z, sh * z);
         x.globalAlpha = 1;
@@ -498,7 +588,7 @@ export class Renderer {
     // --- agenti ---
     this.agentSync -= dt;
     if (this.agentSync <= 0 || g.runtime.agentsDirty) {
-      this.syncAgents(g); this.agentSync = 4; g.runtime.agentsDirty = false;
+      this.syncAgents(g); this.syncCars(g); this.agentSync = 4; g.runtime.agentsDirty = false;
       // pulzy produkce nad budovami — živoucí ekonomika
       if (this.cam.z > 0.7) {
         let shown = 0;
@@ -516,6 +606,22 @@ export class Renderer {
       }
     }
     this.updateAgents(g, dt);
+    this.updateCars(g, dt);
+    // auta / náklaďáky na silnicích
+    for (const cr of this.cars) {
+      const [sx, sy] = this.worldToScreen(cr.px, cr.py);
+      if (sx < -20 || sx > this.W + 20 || sy < -20 || sy > this.H + 20) continue;
+      const ang = Math.atan2((cr.nty - cr.ty), (cr.ntx - cr.tx));
+      const s = z;
+      x.save(); x.translate(sx, sy); x.rotate(ang);
+      x.fillStyle = '#00000030'; x.fillRect(-7 * s, -3.5 * s, 14 * s, 7 * s);
+      const L = cr.kind === 'truck' ? 8 : 6;
+      x.fillStyle = cr.color; x.fillRect(-L * s, -3 * s, 2 * L * s, 6 * s);
+      if (cr.kind === 'truck') { x.fillStyle = '#c8ced8'; x.fillRect((L - 4) * s, -3 * s, 4 * s, 6 * s); } // kabina
+      x.fillStyle = '#9fd8e8'; x.fillRect((L - 3.5) * s, -2 * s, 2 * s, 4 * s);                            // čelní sklo
+      x.fillStyle = '#fff6c8'; x.fillRect((L - 0.5) * s, -2.4 * s, 1.2 * s, 1.6 * s); x.fillRect((L - 0.5) * s, 0.8 * s, 1.2 * s, 1.6 * s); // světla
+      x.restore();
+    }
     const laser = hasTech(g.s, 'laserMining');
     for (const a of this.agentMap.values()) {
       const [sx, sy] = this.worldToScreen(a.x, a.y);
@@ -622,19 +728,17 @@ export class Renderer {
       }
     }
 
-    // --- vláčky mezi nádražími ---
+    // --- vláčky přesně po kolejích (trasy z g.s.railRoutes, středy dlaždic) ---
     {
-      const stations = g.s.buildings.filter(b => b.t === 'trainStation');
-      if (stations.length !== this.trainStations) {
-        this.trainStations = stations.length;
+      const routes = g.s.railRoutes || [];
+      if (routes.length !== this.trainRoutes) {
+        this.trainRoutes = routes.length;
         this.trains = [];
-        for (let i = 1; i < stations.length; i++) {
-          const a = stations[i - 1], b2 = stations[i];
-          const p0: [number, number] = [(a.x + 1) * TILE, (a.y + 2) * TILE + TILE / 2];
-          const p2: [number, number] = [(b2.x + 1) * TILE, (b2.y + 2) * TILE + TILE / 2];
-          const pm: [number, number] = [p2[0], p0[1]];
-          let len = Math.hypot(pm[0] - p0[0], pm[1] - p0[1]) + Math.hypot(p2[0] - pm[0], p2[1] - pm[1]);
-          this.trains.push({ path: [p0, pm, p2], dist: 0, dir: 1, pause: 0, len });
+        for (const route of routes) {
+          const path: [number, number][] = route.map(([tx, ty]) => [(tx + 0.5) * TILE, (ty + 0.5) * TILE]);
+          let len = 0;
+          for (let i = 0; i < path.length - 1; i++) len += Math.hypot(path[i + 1][0] - path[i][0], path[i + 1][1] - path[i][1]);
+          this.trains.push({ path, dist: Math.random() * Math.max(1, len), dir: Math.random() < 0.5 ? 1 : -1, pause: 0, len });
         }
       }
       const pathPos = (path: [number, number][], d: number): [number, number, number] => {

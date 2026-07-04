@@ -241,8 +241,40 @@ function costHtml(cost: Rec, extra = ''): string {
 
 // --- Stavby ---
 let buildTab: BCat | 'all' = 'all';
-const CATS: (BCat | 'all')[] = ['all', 'city', 'food', 'mine', 'ind', 'other'];
-const CAT_KEY: Record<string, string> = { all: 'cat.all', city: 'cat.city', food: 'cat.food', mine: 'cat.mine', ind: 'cat.ind', other: 'cat.other' };
+const CATS: (BCat | 'all')[] = ['all', 'city', 'food', 'mine', 'ind', 'other', 'wonder'];
+const CAT_KEY: Record<string, string> = { all: 'cat.all', city: 'cat.city', food: 'cat.food', mine: 'cat.mine', ind: 'cat.ind', other: 'cat.other', wonder: 'cat.wonder' };
+
+/** krátký popis řetězce výroby (ikony vstupů → výstupů) pro kartu / modal */
+function recipeStr(def: typeof BUILDINGS[number]): string {
+  if (def.prod) return `→ ${RES_BY[def.prod.res]?.icon || ''} ${esc(tres(def.prod.res))}`;
+  if (def.recipe) {
+    const ins = Object.entries(def.recipe.inputs).map(([r]) => RES_BY[r]?.icon || '').join(' ');
+    const outs = Object.entries(def.recipe.outputs).map(([r]) => RES_BY[r]?.icon || '').join(' ');
+    return `${ins} → ${outs}`;
+  }
+  if (def.energyOut) return `→ ⚡`;
+  return '';
+}
+
+/** modal „jak se surovina vyrábí a kde se spotřebuje" — řeší matoucí objevování řetězců */
+function showChain(resId: string) {
+  const d = RES_BY[resId];
+  const mk = (def: typeof BUILDINGS[number]) => {
+    const locked = def.tech && !hasTech(g.s, def.tech);
+    const tag = locked ? ` <span class="badge">🔒 ${esc(tn('tech', def.tech!))}</span>` : ((g.bCount[def.id] || 0) ? ` <span class="badge">×${g.bCount[def.id]}</span>` : '');
+    const rec = recipeStr(def);
+    return `<div style="padding:5px 0;border-bottom:1px solid #ffffff12">
+      <div>${def.icon} <b>${esc(tn('b', def.id))}</b>${tag}</div>
+      ${rec ? `<div style="font-size:12px;opacity:.85">${rec}</div>` : ''}</div>`;
+  };
+  const producers = BUILDINGS.filter(def => def.prod?.res === resId || (def.recipe && def.recipe.outputs[resId]));
+  const consumers = BUILDINGS.filter(def => (def.recipe && def.recipe.inputs[resId]) || def.fuel?.res === resId);
+  const none = `<div style="padding:5px 0;opacity:.6">${t('chain.none')}</div>`;
+  let html = `<h3>${d?.icon || ''} ${esc(tres(resId))}</h3>`;
+  html += `<p style="margin:6px 0 2px"><b>${t('chain.made')}</b></p>` + (producers.map(mk).join('') || none);
+  html += `<p style="margin:12px 0 2px"><b>${t('chain.used')}</b></p>` + (consumers.map(mk).join('') || none);
+  showModal(html, [{ label: t('ok') }]);
+}
 
 function renderBuild() {
   pbody.innerHTML = '';
@@ -265,7 +297,7 @@ function renderBuild() {
     const gov = el('div', 'idlebox');
     gov.innerHTML = `<span>🏛️ <b>${t('auto.title')}</b></span>`;
     const wrap = el('span');
-    const opts: [string, string][] = [['food', '🌾'], ['wood', '🪵'], ['store', '📦'], ['water', '💧']];
+    const opts: [string, string][] = [['food', '🌾'], ['wood', '🪵'], ['housing', '🏠'], ['industry', '🏭'], ['science', '🔬'], ['water', '💧'], ['store', '📦']];
     for (const [key2, ic] of opts) {
       const lb = el('label');
       lb.style.cssText = 'display:inline-flex;align-items:center;gap:3px;margin-left:8px;font-size:12px;cursor:pointer';
@@ -291,8 +323,10 @@ function renderBuild() {
     if (def.jobs) stat = `<span class="badge">${t('build.slots', def.jobs)}</span>`;
     if (def.housing) stat = `<span class="badge">${t('build.housing', def.housing)}</span>`;
     if (def.water) stat += `<span class="badge">${t('build.water', def.water)}</span>`;
+    if (def.wonder) stat += `<span class="badge">${t('build.wonder', Math.round((def.buildTime || 0)))}</span>`;
+    const rec = recipeStr(def);
     card.innerHTML = `<h4>${def.icon} ${esc(tn('b', def.id))} ${n ? `<span class="badge">×${n}</span>` : ''} ${stat}</h4>
-      <div class="desc">${esc(td('b', def.id))}</div>${costHtml(cost)}`;
+      <div class="desc">${esc(td('b', def.id))}</div>${rec ? `<div class="desc" style="opacity:.9">🔧 ${rec}</div>` : ''}${costHtml(cost)}`;
     const btn = el('button', '', g.runtime.buildSel === def.id ? t('build.cancel') : t('build.btn')) as HTMLButtonElement;
     btn.disabled = !canAfford(g, cost) && g.runtime.buildSel !== def.id;
     btn.onclick = () => {
@@ -348,6 +382,7 @@ function renderStorage() {
   for (const r of RES) {
     const discovered = (g.s.totals[r.id] || 0) > 0 || (g.s.res[r.id] || 0) > 0;
     if (!discovered) continue;
+    const clickable = r.id !== 'gold';
     const amount = g.s.res[r.id] || 0;
     const cap = capOf(g, r.id);
     const rate = g.rates[r.id] || 0;
@@ -360,10 +395,15 @@ function renderStorage() {
     const barCol = pct >= 95 ? '#ff7b72' : pct >= 70 ? '#d29922' : '#4a6da8';
     const row = el('div', 'srow');
     row.innerHTML = `<div style="font-size:17px">${r.icon}</div>
-      <div class="nm">${esc(tres(r.id))}<small>${eta}</small></div>
+      <div class="nm">${esc(tres(r.id))}<small>${clickable ? '🔗 ' : ''}${eta}</small></div>
       <div class="cnt"><b>${fmt(amount)}</b>${isFinite(cap) ? ' / ' + fmt(cap) : ''}
         <span class="rate ${rate > 0.005 ? 'pos' : rate < -0.005 ? 'neg' : ''}">${Math.abs(rate) > 0.005 ? fmtRate(rate) : ''}</span></div>
       ${isFinite(cap) ? `<div class="sbar"><i style="width:${pct}%;background:${barCol}"></i></div>` : ''}`;
+    if (clickable) {
+      row.style.cursor = 'pointer';
+      row.title = t('store.chainHint');
+      row.onclick = () => showChain(r.id);
+    }
     pbody.appendChild(row);
   }
 }
@@ -759,6 +799,7 @@ export function initUI(game: Game, opts: { renderer: Renderer; onNewGame: () => 
   bus.on('burned', (e: any) => toast(t('toast.burned', esc(tn('b', e.t))), 'ach'));
   bus.on('repaired', (e: any) => toast(t('toast.repaired', esc(tn('b', e.t)))));
   bus.on('circus', () => toast(t('toast.circus'), 'gold'));
+  bus.on('wonderDone', (e: any) => toast(t('toast.wonder', esc(tn('b', e.t))), 'gold'));
   bus.on('meteor', (e: any) => toast(t('toast.meteor', fmt(e.amt), esc(tres(e.res))), 'gold'));
   bus.on('govBuilt', (e: any) => {
     const now2 = Date.now();

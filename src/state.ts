@@ -14,6 +14,7 @@ export interface BuildingInst {
   dm?: number;     // čtvrťový bonus (cache z recount)
   fire?: number;   // hoří! zbývající sekundy požáru (klikáním se hasí)
   dmg?: 1;         // vyhořelá — neprodukuje, nutná oprava
+  build?: number;  // Div světa se staví: zbývající sekundy výstavby (dokud > 0, neúčinkuje)
 }
 
 /** efektivita podle úrovně budovy */
@@ -37,6 +38,7 @@ export interface GameState {
   buildings: BuildingInst[];
   roads: string[];
   rails: string[];
+  railRoutes: [number, number][][];  // polyliny tras vláčků (dlaždicové souřadnice středů)
   nodeDelta: Record<string, Record<number, number>>;
   techs: string[];
   upgrades: Rec;                     // id -> level
@@ -57,8 +59,12 @@ export interface Mults {
   growth: number; hapBonus: number; housing: number;
   critChance: number; critMult: number; goldenFreq: number;
   offlineEff: number; offlineCapH: number; kinetic: number;
+  cost: number;                 // násobič ceny staveb (Divy světa snižují)
   autoAssign: boolean;
   governor: boolean;
+  autoMerge: boolean;
+  autoUpgrade: boolean;
+  agroIndustry: boolean;        // farmy netrpí zimou (Průmyslové zemědělství)
 }
 
 export interface GoldenCitizen { tx: number; ty: number; until: number }
@@ -120,6 +126,7 @@ export function newState(seed: number, carry?: { legacy: GameState['legacy']; ac
     buildings: [{ t: 'plaza', x: -1, y: -1 }],
     roads,
     rails: [],
+    railRoutes: [],
     nodeDelta: {},
     techs,
     upgrades: {},
@@ -141,8 +148,12 @@ export function baseMults(): Mults {
     growth: 1, hapBonus: 0, housing: 1,
     critChance: 0.02, critMult: 10, goldenFreq: 1,
     offlineEff: 0.5, offlineCapH: 8, kinetic: 0,
+    cost: 1,
     autoAssign: false,
     governor: false,
+    autoMerge: false,
+    autoUpgrade: false,
+    agroIndustry: false,
   };
 }
 
@@ -190,7 +201,7 @@ export function recount(g: Game) {
     c[b.t] = (c[b.t] || 0) + 1;
     const def = B[b.t];
     if (!def) continue;
-    if (b.fire || b.dmg) continue; // hořící/vyhořelé budovy nefungují
+    if (b.fire || b.dmg || b.build) continue; // hořící/vyhořelé/rozestavěné budovy nefungují
     const bigMult = b.big ? 4 : 1;
     const le = lvlEff(b.lvl);
     if (def.jobs) sl[b.t] = (sl[b.t] || 0) + def.jobs * bigMult;
@@ -209,7 +220,7 @@ export function recount(g: Game) {
 
 /** čtvrtě: ≥3 produkční budovy stejné kategorie v okruhu 4 → bonus (cache v inst.dm) */
 function computeDistricts(g: Game) {
-  const prod = g.s.buildings.filter(b => { const d = B[b.t]; return d && d.jobs && (d.prod || d.recipe); });
+  const prod = g.s.buildings.filter(b => { const d = B[b.t]; return d && d.jobs && (d.prod || d.recipe) && !b.fire && !b.dmg && !b.build; });
   for (const b of prod) {
     const cat = B[b.t].cat;
     let near = b.big ? 3 : 0; // velká budova reprezentuje 4 budovy — čtvrť si drží sama

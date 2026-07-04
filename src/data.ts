@@ -33,7 +33,10 @@ export const RES: ResDef[] = [
 export const RES_BY: Record<string, ResDef> = Object.fromEntries(RES.map(r => [r.id, r]));
 
 // ---------- Budovy ----------
-export type BCat = 'city' | 'food' | 'mine' | 'ind' | 'other';
+export type BCat = 'city' | 'food' | 'mine' | 'ind' | 'other' | 'wonder';
+
+/** efekty Divu světa (aplikují se globálně po dostavbě) */
+export interface WonderFx { click?: number; global?: number; research?: number; cost?: number }
 
 export interface BDef {
   id: string; name: string; icon: string; desc: string; era: number;
@@ -51,6 +54,9 @@ export interface BDef {
   tech?: string;                          // vyžadovaná technologie
   unbuildable?: boolean;                  // náves
   nearWater?: boolean;                    // musí stát u vody (rybárna)
+  wonder?: boolean;                       // Div světa — velká stavba s dobou výstavby a globálním efektem
+  buildTime?: number;                     // s – doba výstavby (rozestavěno = neúčinkuje)
+  wfx?: WonderFx;                         // globální efekt po dostavbě
 }
 
 export const BUILDINGS: BDef[] = [
@@ -85,6 +91,15 @@ export const BUILDINGS: BDef[] = [
   { id: 'trainStation', name: 'Nádraží', icon: '🚉', desc: 'Železnice — masivně zlepšuje dopravu surovin.', era: 4, cat: 'other', cost: { steel: 80, brick: 80 }, size: 2, tech: 'railways' },
   { id: 'hitechLab', name: 'Hi-tech laboratoř', icon: '🔬', desc: 'Vyrábí elektroniku a produkuje spoustu vědy.', era: 5, cat: 'ind', cost: { steel: 60, machinery: 25 }, size: 1, jobs: 2, jobName: 'Vědci', recipe: { inputs: { machinery: 0.04 }, outputs: { electronics: 0.015, research: 1.4 } }, energyUse: 3, tech: 'electronicsTech' },
   { id: 'monument', name: 'Monument', icon: '🗿', desc: 'Velkolepý pomník tvé civilizace. Spokojenost a sláva (skóre).', era: 3, cat: 'city', cost: { stone: 600, brick: 250, gold: 800 }, size: 2, hap: 0.12, tech: 'monuments' },
+  // éra 4–6: megalomanie — velké bydlení, moderní energie
+  { id: 'aptBlock', name: 'Činžák', icon: '🏢', desc: 'Zděný činžovní dům — bydlení pro 30 obyvatel.', era: 4, cat: 'city', cost: { brick: 150, steel: 20 }, size: 1, housing: 30, tech: 'concrete' },
+  { id: 'towerBlock', name: 'Panelák', icon: '🏬', desc: 'Betonový výškový dům — bydlení pro 100 obyvatel.', era: 5, cat: 'city', cost: { steel: 120, machinery: 20 }, size: 1, housing: 100, tech: 'skyscrapers' },
+  { id: 'arcology', name: 'Arkologie', icon: '🌃', desc: 'Soběstačné město v jediné budově — bydlení pro 1000 obyvatel!', era: 6, cat: 'city', cost: { steel: 800, electronics: 150, machinery: 100 }, size: 2, housing: 1000, hap: 0.06, tech: 'arcologyTech' },
+  { id: 'nuclearPlant', name: 'Jaderná elektrárna', icon: '☢️', desc: 'Ohromný a čistý zdroj energie — bez paliva. Pohání celá města továren.', era: 5, cat: 'ind', cost: { steel: 200, machinery: 60 }, size: 2, jobs: 3, jobName: 'Technici', energyOut: 15, tech: 'nuclearPower' },
+  // Divy světa — velkolepé stavby s dobou výstavby a globálním efektem
+  { id: 'pyramid', name: 'Velká pyramida', icon: '🔺', desc: 'Div světa (3×3). Sjednotí národ: ruční těžba (klik) ×2 a velká spokojenost.', era: 3, cat: 'wonder', cost: { stone: 2500, gold: 400 }, size: 3, hap: 0.08, tech: 'monuments', wonder: true, buildTime: 90, wfx: { click: 2 } },
+  { id: 'steelTower', name: 'Ocelová věž', icon: '🗼', desc: 'Div světa (3×3). Zázrak inženýrství: −15 % cen staveb a +20 % veškeré produkce.', era: 4, cat: 'wonder', cost: { steel: 600, brick: 800, gold: 2000 }, size: 3, hap: 0.1, tech: 'industrialization', wonder: true, buildTime: 120, wfx: { cost: 0.85, global: 1.2 } },
+  { id: 'spaceElevator', name: 'Vesmírný výtah', icon: '🛰️', desc: 'Div světa (3×3). Brána ke hvězdám: veškerá produkce ×2 a věda ×1,5.', era: 6, cat: 'wonder', cost: { steel: 3000, electronics: 400, gold: 50000 }, size: 3, hap: 0.12, tech: 'robotics', wonder: true, buildTime: 180, wfx: { global: 2, research: 1.5 } },
 ];
 export const B: Record<string, BDef> = Object.fromEntries(BUILDINGS.map(b => [b.id, b]));
 
@@ -96,7 +111,7 @@ export interface TechFx {
   toolPower?: number;                // nastaví (ne násobí) sílu nástrojů
   haul?: number;                     // + dosah dopravy
   hap?: number; growth?: number;
-  special?: 'laser' | 'heli' | 'fusion' | 'ascension';
+  special?: 'laser' | 'heli' | 'fusion' | 'ascension' | 'agroIndustry' | 'cars';
 }
 export interface TDef { id: string; name: string; desc: string; era: number; cost: number; mats?: Rec; req: string[]; fx: TechFx }
 
@@ -130,15 +145,21 @@ export const TECHS: TDef[] = [
   { id: 'railways', name: 'Železnice', desc: 'Vlaky: +40 dosah dopravy. Odemyká nádraží.', era: 4, cost: 16000, req: ['steamPower'], fx: { haul: 40, unlock: ['trainStation'] } },
   { id: 'industrialization', name: 'Industrializace', desc: 'Odemyká továrny. Veškerá produkce ×1,5.', era: 4, cost: 20000, mats: { steel: 40 }, req: ['steel', 'steamPower'], fx: { unlock: ['factory'], global: 1.5 } },
   { id: 'electricity', name: 'Elektřina', desc: 'Odemyká elektrárnu — energie pro továrny.', era: 4, cost: 25000, req: ['industrialization'], fx: { unlock: ['powerPlant'] } },
+  { id: 'concrete', name: 'Beton', desc: 'Odemyká činžáky (+30 bydlení) a moderní asfaltové silnice.', era: 4, cost: 40000, req: ['industrialization'], fx: { unlock: ['aptBlock'] } },
   // éra 5 – moderna
   { id: 'electronicsTech', name: 'Elektronika', desc: 'Odemyká hi-tech laboratoř.', era: 5, cost: 60000, req: ['electricity'], fx: { unlock: ['hitechLab'] } },
   { id: 'sanitation', name: 'Hygiena', desc: 'Kanalizace a medicína: +10 % spokojenosti, růst ×1,5.', era: 5, cost: 70000, req: ['electricity'], fx: { hap: 0.1, growth: 1.5 } },
   { id: 'heavyMachinery', name: 'Těžké stroje', desc: 'Rypadla: doly a lom ×3, tábor ×2.', era: 5, cost: 80000, mats: { machinery: 20 }, req: ['electronicsTech'], fx: { job: { copperMine: 3, ironMine: 3, coalMine: 3, quarry: 3, forestCamp: 2 } } },
+  { id: 'nuclearPower', name: 'Jaderná energie', desc: 'Odemyká jadernou elektrárnu — obrovský a bezpalivový zdroj energie. ☢️', era: 5, cost: 90000, mats: { steel: 60 }, req: ['electricity', 'electronicsTech'], fx: { unlock: ['nuclearPlant'] } },
+  { id: 'automobiles', name: 'Automobilismus', desc: 'Auta a náklaďáky brázdí silnice: +30 dosah dopravy a živé moderní město. 🚗', era: 5, cost: 85000, mats: { steel: 40 }, req: ['industrialization', 'electricity'], fx: { haul: 30, special: 'cars' } },
+  { id: 'industrialFarming', name: 'Průmyslové zemědělství', desc: 'Kombajny a skleníky: farmy ×6 a už netrpí zimou. 🚜', era: 5, cost: 75000, mats: { machinery: 30 }, req: ['heavyMachinery'], fx: { job: { farm: 6 }, special: 'agroIndustry' } },
+  { id: 'skyscrapers', name: 'Mrakodrapy', desc: 'Odemyká paneláky (+100 bydlení). Megaměsta se rodí.', era: 5, cost: 150000, mats: { steel: 100 }, req: ['concrete', 'electronicsTech'], fx: { unlock: ['towerBlock'] } },
   { id: 'automation', name: 'Automatizace', desc: 'Veškerá produkce ×2.', era: 5, cost: 120000, mats: { machinery: 50 }, req: ['electronicsTech'], fx: { global: 2 } },
   // éra 6 – budoucnost
   { id: 'laserMining', name: 'Laserové těžební pušky', desc: 'Tvoji lidé těží LASERY. Těžba ×10, klik ×10. 🔴', era: 6, cost: 300000, mats: { electronics: 30 }, req: ['heavyMachinery', 'automation'], fx: { gather: 10, click: 10, special: 'laser' } },
   { id: 'rotorcraft', name: 'Vrtulníky', desc: 'Vzdálenost přestává existovat — vrtulníky přepraví vše. 🚁', era: 6, cost: 400000, mats: { electronics: 50 }, req: ['automation'], fx: { haul: 9999, special: 'heli' } },
-  { id: 'robotics', name: 'Robotika', desc: 'Robotičtí pomocníci: veškerá produkce ×2.', era: 6, cost: 500000, mats: { electronics: 80 }, req: ['laserMining'], fx: { global: 2 } },
+  { id: 'robotics', name: 'Robotika', desc: 'Robotičtí pomocníci: veškerá produkce ×2. Umožňuje Vesmírný výtah.', era: 6, cost: 500000, mats: { electronics: 80 }, req: ['laserMining'], fx: { global: 2 } },
+  { id: 'arcologyTech', name: 'Arkologie', desc: 'Odemyká Arkologie — mrakodrap-město pro 1000 lidí. 🌃', era: 6, cost: 600000, mats: { electronics: 100 }, req: ['robotics'], fx: { unlock: ['arcology'] } },
   { id: 'fusion', name: 'Fúze', desc: 'Elektrárny ×10 energie a už nepotřebují uhlí. ☀️', era: 6, cost: 800000, mats: { electronics: 120 }, req: ['robotics'], fx: { special: 'fusion' } },
   { id: 'transcendence', name: 'Transcendence', desc: 'Tvá civilizace je připravena vstoupit do dějin… Odemyká Vzestup.', era: 6, cost: 1000000, req: ['fusion', 'rotorcraft'], fx: { special: 'ascension' } },
 ];
@@ -149,7 +170,7 @@ export interface UDef {
   id: string; name: string; icon: string; desc: string;
   max: number; base: Rec; growth: number;
   reqTech?: string;
-  fx: { job?: Record<string, number>; click?: number; capacity?: number; research?: number; hap?: number; housing?: number; growth?: number; haulX?: number; critChance?: number; goldenFreq?: number; kinetic?: number; special?: 'autoAssign' | 'sciPerTech' | 'governor' };
+  fx: { job?: Record<string, number>; click?: number; capacity?: number; research?: number; hap?: number; housing?: number; growth?: number; haulX?: number; critChance?: number; goldenFreq?: number; kinetic?: number; special?: 'autoAssign' | 'sciPerTech' | 'governor' | 'autoMerge' | 'autoUpgrade' };
 }
 
 export const UPGRADES: UDef[] = [
@@ -167,7 +188,9 @@ export const UPGRADES: UDef[] = [
   { id: 'goldRush', name: 'Zlatá horečka', icon: '🌟', desc: 'Zlatí občané chodí 2× častěji.', max: 1, base: { gold: 2000 }, growth: 1, fx: { goldenFreq: 2 } },
   { id: 'kineticClick', name: 'Kinetický klik', icon: '⚡', desc: 'Každý klik navíc přidá 2 % produkce dané suroviny za sekundu.', max: 1, base: { gold: 5000 }, growth: 1, reqTech: 'industrialization', fx: { kinetic: 0.02 } },
   { id: 'academy', name: 'Akademie', icon: '🎓', desc: 'Knihovny ×1,5 za úroveň.', max: 5, base: { gold: 800, plank: 200 }, growth: 4, reqTech: 'education', fx: { job: { library: 1.5 } } },
-  { id: 'governor', name: 'Guvernér', icon: '🏛️', desc: 'Město staví samo podle potřeb: jídlo, dřevo, sklady, studny (zapíná se v panelu Stavby).', max: 1, base: { gold: 800 }, growth: 1, reqTech: 'writing', fx: { special: 'governor' } },
+  { id: 'governor', name: 'Guvernér', icon: '🏛️', desc: 'Město staví samo podle potřeb: jídlo, dřevo, bydlení, výroba, věda, sklady, voda. Staví rychle (zapíná se v panelu Stavby).', max: 1, base: { gold: 800 }, growth: 1, reqTech: 'writing', fx: { special: 'governor' } },
+  { id: 'autoMerge', name: 'Stavební cechy', icon: '🔗', desc: 'Město samo slučuje 4 stejné budovy v poli 2×2 do velkých budov.', max: 1, base: { gold: 3000 }, growth: 1, reqTech: 'guilds', fx: { special: 'autoMerge' } },
+  { id: 'autoUpgrade', name: 'Stavební úřad', icon: '⬆️', desc: 'Město samo vylepšuje úrovně budov, na které má přebytek surovin.', max: 1, base: { gold: 5000 }, growth: 1, reqTech: 'education', fx: { special: 'autoUpgrade' } },
 ];
 export const UPG_BY: Record<string, UDef> = Object.fromEntries(UPGRADES.map(u => [u.id, u]));
 
@@ -184,6 +207,7 @@ export const ACHS: AchDef[] = [
   { id: 'pop50', name: 'Vesnice', desc: '50 obyvatel.', icon: '🏘️', cond: g => g.s.pop >= 50 },
   { id: 'pop200', name: 'Město', desc: '200 obyvatel.', icon: '🏙️', cond: g => g.s.pop >= 200 },
   { id: 'pop1000', name: 'Metropole', desc: '1 000 obyvatel.', icon: '🌆', cond: g => g.s.pop >= 1000 },
+  { id: 'pop10k', name: 'Velkoměsto', desc: '10 000 obyvatel — cítíš tu sílu?', icon: '🌃', cond: g => g.s.pop >= 10000 },
   { id: 'wood1k', name: 'Dřevorubec', desc: 'Nasbírej celkem 1 000 dřeva.', icon: '🪵', cond: g => (g.s.totals.wood || 0) >= 1000 },
   { id: 'wood100k', name: 'Odlesnění', desc: 'Nasbírej celkem 100 000 dřeva.', icon: '🌲', cond: g => (g.s.totals.wood || 0) >= 100000 },
   { id: 'stone10k', name: 'Kamenolam', desc: 'Nasbírej celkem 10 000 kamene.', icon: '🪨', cond: g => (g.s.totals.stone || 0) >= 10000 },
@@ -197,6 +221,8 @@ export const ACHS: AchDef[] = [
   { id: 'era6', name: 'Budoucnost je teď', desc: 'Dosáhni éry Budoucnosti.', icon: '🚀', cond: g => g.maxEra >= 6 },
   { id: 'happy', name: 'Ráj na zemi', desc: 'Spokojenost 90 % a víc.', icon: '😊', cond: g => g.happiness >= 0.9 },
   { id: 'monumental', name: 'Monumentální', desc: 'Postav monument.', icon: '🗿', cond: g => (g.bCount.monument || 0) >= 1 },
+  { id: 'wonder1', name: 'Sedmý div', desc: 'Dostav Div světa.', icon: '🗼', cond: g => g.s.buildings.some((b: any) => B[b.t]?.wonder && !b.build) },
+  { id: 'nuclear', name: 'Atomový věk', desc: 'Postav jadernou elektrárnu.', icon: '☢️', cond: g => (g.bCount.nuclearPlant || 0) >= 1 },
   { id: 'golden5', name: 'Lovec štěstí', desc: 'Chyť 5 zlatých občanů.', icon: '🌟', cond: g => (g.s.stats.goldenClicked || 0) >= 5 },
   { id: 'ascend1', name: 'Vzestup', desc: 'Proveď první Vzestup.', icon: '✨', cond: g => (g.s.stats.ascensions || 0) >= 1 },
   { id: 'laserAge', name: 'Světelná éra', desc: 'Vyzkoumej laserové těžební pušky.', icon: '🔴', cond: g => g.s.techs.includes('laserMining') },
@@ -233,7 +259,7 @@ export const SEASON_LEN = 360;
 export const SEASON_ICONS = ['🌸', '☀️', '🍂', '❄️'];
 
 /** budovy, které jde sloučit 4-v-1 do "velké budovy" (2×2, +50 % výkon) */
-export const MERGEABLE = new Set(['farm', 'hut', 'house', 'forestCamp', 'gatherHut', 'quarry', 'sawmill', 'copperMine', 'ironMine', 'coalMine', 'library', 'market']);
+export const MERGEABLE = new Set(['farm', 'hut', 'house', 'aptBlock', 'towerBlock', 'forestCamp', 'gatherHut', 'quarry', 'sawmill', 'copperMine', 'ironMine', 'coalMine', 'library', 'market', 'brickworks', 'smelter', 'ironworks', 'steelworks']);
 
 // ---------- Adjacency synergie (bonus za umístění budovy u zdrojů) ----------
 export interface AdjRule { kinds?: number[]; water?: boolean; per: number; cap: number; label: string }

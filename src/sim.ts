@@ -50,7 +50,24 @@ export function recomputeMults(g: Game) {
     }
     if (fx.special === 'autoAssign') m.autoAssign = true;
     if (fx.special === 'governor') m.governor = true;
+    if (fx.special === 'autoMerge') m.autoMerge = true;
+    if (fx.special === 'autoUpgrade') m.autoUpgrade = true;
     if (fx.special === 'sciPerTech') m.research *= 1 + 0.005 * s.techs.length;
+  }
+
+  // technologie se speciálním efektem
+  if (hasTech(s, 'industrialFarming')) m.agroIndustry = true;
+
+  // Divy světa — globální efekt po dostavbě
+  for (const b of s.buildings) {
+    if (b.build) continue;
+    const def = B[b.t];
+    if (!def || !def.wfx) continue;
+    const w = def.wfx;
+    if (w.click) m.click *= w.click;
+    if (w.global) m.global *= w.global;
+    if (w.research) m.research *= w.research;
+    if (w.cost) m.cost *= w.cost;
   }
 
   // achievementy: +2 % globální produkce každý
@@ -167,21 +184,21 @@ export function tick(g: Game, dt: number) {
   }
   const typeF = (t: string) => { const e = tf[t]; return e && e.n ? e.s / e.n : 1; };
 
-  // --- energie (elektrárny první, továrny podle throttle) ---
+  // --- energie (zdroje první, spotřebiče podle throttle) ---
   const fusion = hasTech(s, 'fusion');
   let eProd = 0;
-  {
-    const def = B.powerPlant;
-    const n = activeWorkers(g, 'powerPlant');
-    if (n > 0) {
-      let ratio = 1;
-      if (!fusion && def.fuel) {
-        const want = n * def.fuel.rate * dt;
-        ratio = want > 0 ? clamp(avail(def.fuel.res) / want, 0, 1) : 1;
-        add(def.fuel.res, -want * ratio);
-      }
-      eProd = n * (def.energyOut || 0) * (fusion ? 10 : 1) * ratio * typeF('powerPlant');
+  for (const def of BUILDINGS) {
+    if (!def.energyOut) continue;
+    const n = activeWorkers(g, def.id);
+    if (n <= 0) continue;
+    let ratio = 1;
+    const fusionMult = def.id === 'powerPlant' && fusion ? 10 : 1;
+    if (def.fuel && fusionMult === 1) {
+      const want = n * def.fuel.rate * dt;
+      ratio = want > 0 ? clamp(avail(def.fuel.res) / want, 0, 1) : 1;
+      add(def.fuel.res, -want * ratio);
     }
+    eProd += n * def.energyOut * fusionMult * ratio * typeF(def.id);
   }
   let eUse = 0;
   for (const def of BUILDINGS) if (def.energyUse) eUse += activeWorkers(g, def.id) * def.energyUse;
@@ -191,15 +208,15 @@ export function tick(g: Game, dt: number) {
   // --- produkce a recepty ---
   const tMult = toolMult(g);
   for (const def of BUILDINGS) {
-    if (!def.jobs || def.id === 'powerPlant') continue;
+    if (!def.jobs || def.energyOut) continue;
     const n = activeWorkers(g, def.id);
     if (!n) continue;
 
     let mult = (m.job[def.id] || 1) * prodF * typeF(def.id);
     if (def.raw) mult *= m.gather * tMult;
     if (def.energyUse) mult *= throttle;
-    // roční období: léto přeje farmám, podzim sběru, zima farmy dusí
-    if (def.id === 'farm') mult *= [1, 1.2, 1, 0.6][g.season];
+    // roční období: léto přeje farmám, podzim sběru, zima farmy dusí (Průmyslové zemědělství zimu ruší)
+    if (def.id === 'farm') mult *= (m.agroIndustry ? [1.1, 1.3, 1.1, 1.1] : [1, 1.2, 1, 0.6])[g.season];
     else if (def.id === 'gatherHut' || def.id === 'forestCamp') mult *= g.season === 2 ? 1.2 : 1;
 
     if (def.prod) {
@@ -257,10 +274,10 @@ export function tick(g: Game, dt: number) {
   }
   for (const r of Object.keys(g.rates)) if (!(r in delta)) g.rates[r] = lerp(g.rates[r], 0, 0.12);
 
-  // --- růst populace (jaro přeje) ---
+  // --- růst populace (jaro přeje; s érou roste rychleji → megaměsta) ---
   const housing = housingCap(g);
   if (s.pop < housing && g.happiness > 0.55 && ((s.res.food || 0) > 1 || (s.res.fish || 0) > 1)) {
-    s.popFrac += 0.016 * Math.sqrt(s.pop + 1) * g.happiness * m.growth * (g.season === 0 ? 1.3 : 1) * dt;
+    s.popFrac += 0.016 * Math.sqrt(s.pop + 1) * g.happiness * m.growth * (1 + 0.5 * g.maxEra) * (g.season === 0 ? 1.3 : 1) * dt;
   } else if ((g.starving || g.happiness < 0.25) && s.pop > 3) {
     s.popFrac -= 0.012 * Math.sqrt(s.pop) * dt;
   }
@@ -319,6 +336,15 @@ let organicTimer = 0, saveTimer = 0;
 export function slowTick(g: Game, seconds: number, rand: () => number) {
   const s = g.s;
   g.world.regen(seconds);
+
+  // Divy světa se dostavují
+  let wonderDone = false;
+  for (const b of s.buildings) {
+    if (!b.build) continue;
+    b.build -= seconds;
+    if (b.build <= 0) { delete b.build; wonderDone = true; bus.emit('wonderDone', { t: b.t, x: b.x, y: b.y }); }
+  }
+  if (wonderDone) { recount(g); recomputeMults(g); g.runtime.agentsDirty = true; }
 
   // organický růst města
   organicTimer += seconds;
@@ -392,6 +418,9 @@ export function slowTick(g: Game, seconds: number, rand: () => number) {
 
   // --- Guvernér: auto-stavění podle potřeb ---
   if (g.m.governor) governorTick(g, rand);
+  // --- Stavební cechy / úřad: auto-slučování a auto-vylepšování ---
+  if (g.m.autoMerge) autoMergeStep(g);
+  if (g.m.autoUpgrade) autoUpgradeStep(g);
 
   // achievementy
   for (const a of ACHS) {
@@ -453,14 +482,64 @@ export function repairBuilding(g: Game, idx: number): string | null {
   return null;
 }
 
-/** Guvernér: postaví max. 1 budovu za tick podle zapnutých potřeb */
+/** najdi volnou plochu size×size u cest pro autostavbu */
+function findAutoSpotSize(g: Game, rand: () => number, size: number): [number, number] | null {
+  if (size <= 1) return findAutoSpot(g, rand);
+  const roads = [...g.world.roads];
+  if (!roads.length) return null;
+  for (let i = 0; i < 40; i++) {
+    const rk = roads[Math.floor(rand() * roads.length)];
+    const [rx, ry] = rk.split(',').map(Number);
+    for (const [ox, oy] of [[1, 0], [-size, 0], [0, 1], [0, -size], [1, 1], [-size, -size], [1, -size], [-size, 1]]) {
+      const tx = rx + ox, ty = ry + oy;
+      if (Math.hypot(tx, ty) > 75) continue;
+      let ok = true;
+      for (let dy = 0; dy < size && ok; dy++) for (let dx = 0; dx < size && ok; dx++) if (!g.world.buildable(tx + dx, ty + dy)) ok = false;
+      if (ok) return [tx, ty];
+    }
+  }
+  extendRoad(g, rand);
+  return null;
+}
+
+/** nejlepší odemčené a cenově dostupné bydlení (arkologie > panelák > činžák > dům > chatrč) */
+function govHousingType(g: Game): string | null {
+  const order = ['arcology', 'towerBlock', 'aptBlock', 'house', 'hut'];
+  const unlocked = order.filter(t => { const d = B[t]; return (!d.tech || hasTech(g.s, d.tech)) && g.maxEra >= d.era; });
+  if (!unlocked.length) return 'hut';
+  for (const t of unlocked) if (canAfford(g, buildCost(g, t))) return t; // největší, které utáhneme
+  return unlocked[unlocked.length - 1];                                  // nejlevnější — zkusí znovu, až bude na to
+}
+
+/** budova, která spotřebovává přetékající surovinu (řetěz výroby) */
+function govIndustryType(g: Game): string | null {
+  const s = g.s;
+  let bestRes: string | null = null, bestFill = 0.82;
+  for (const r of RES) {
+    const cap = capOf(g, r.id);
+    if (!isFinite(cap)) continue;
+    const fill = (s.res[r.id] || 0) / cap;
+    if (fill >= 0.82 && (g.rates[r.id] || 0) > 0.005 && fill > bestFill) { bestFill = fill; bestRes = r.id; }
+  }
+  if (!bestRes) return null;
+  const consumer = BUILDINGS.find(d => d.jobs && (!d.tech || hasTech(s, d.tech)) &&
+    ((d.recipe && d.recipe.inputs[bestRes!]) || (d.fuel && d.fuel.res === bestRes)));
+  return consumer ? consumer.id : null;
+}
+
+/** Guvernér 2.0: obslouží až 4 potřeby za sekundu podle zapnutých přepínačů */
 function governorTick(g: Game, rand: () => number) {
+  let actions = 4;
+  while (actions-- > 0) { if (!govStep(g, rand)) break; }
+}
+
+function govStep(g: Game, rand: () => number): boolean {
   const s = g.s;
   const auto = s.auto || {};
   const tryGovBuild = (t: string): boolean => {
     const cost = buildCost(g, t);
     if (!canAfford(g, cost)) return false;
-    const spot = findAutoSpot(g, rand);
+    const spot = findAutoSpotSize(g, rand, B[t].size);
     if (!spot) return false;
     pay(g, cost);
     placeBuilding(g, t, spot[0], spot[1], true);
@@ -468,7 +547,7 @@ function governorTick(g: Game, rand: () => number) {
     bus.emit('govBuilt', { t });
     return true;
   };
-  // nejdřív obsaď volné sloty nezaměstnanými, teprve pak stav
+  // nejdřív obsaď volné sloty nezaměstnanými, teprve pak stav novou budovu
   const fillOrBuild = (t: string): boolean => {
     const free = slots(g, t) - (s.assigned[t] || 0);
     const idle = s.pop - sumAssigned(s);
@@ -476,24 +555,84 @@ function governorTick(g: Game, rand: () => number) {
     if (free <= 0) return tryGovBuild(t);
     return false;
   };
-  // 1) jídlo: produkce nestíhá spotřebu
-  if (auto.food && (g.rates.food || 0) < s.pop * 0.08 * 1.15) {
-    if (fillOrBuild(hasTech(s, 'agriculture') ? 'farm' : 'gatherHut')) return;
+
+  // 1) jídlo — produkce nestíhá spotřebu
+  if (auto.food && (g.rates.food || 0) < s.pop * 0.08 * 1.2) {
+    if (fillOrBuild(hasTech(s, 'agriculture') ? 'farm' : 'gatherHut')) return true;
   }
-  // 2) dřevo: záporná bilance (zima!) nebo skoro nic
-  if (auto.wood && (g.rates.wood || 0) < 0.1 && fillOrBuild('forestCamp')) return;
-  // 3) sklady: něco přetéká
+  // 2) voda — nedostatečné pokrytí
+  if (auto.water && waterCap(g) < s.pop * 1.1 && tryGovBuild('well')) return true;
+  // 3) bydlení — dochází místo (staví nejlepší dostupné)
+  if (auto.housing) {
+    const room = housingCap(g) - s.pop;
+    if (room < Math.max(6, s.pop * 0.12)) {
+      const ht = govHousingType(g);
+      if (ht && tryGovBuild(ht)) return true;
+    }
+  }
+  // 4) dřevo — skoro nic / záporná bilance (zima!)
+  if (auto.wood && (g.rates.wood || 0) < 0.2 && fillOrBuild('forestCamp')) return true;
+  // 5) výroba — přetékající surovinu pošli do dalšího článku řetězu
+  if (auto.industry) {
+    const it = govIndustryType(g);
+    if (it && fillOrBuild(it)) return true;
+  }
+  // 6) věda — drž knihovny úměrně městu a zaměstnávej učence
+  if (auto.science) {
+    const free = slots(g, 'library') - (s.assigned.library || 0);
+    const idle = s.pop - sumAssigned(s);
+    if (free > 0 && idle > 0) { setAssign(g, 'library', (s.assigned.library || 0) + Math.min(free, idle)); return true; }
+    const want = Math.max(1, Math.floor(s.pop / 60));
+    if ((g.bCount.library || 0) < want && tryGovBuild('library')) return true;
+  }
+  // 7) sklady — něco přetéká a nemá spotřebitele
   if (auto.store) {
     for (const r of RES) {
       const cap = capOf(g, r.id);
       if (isFinite(cap) && (s.res[r.id] || 0) >= cap * 0.95 && (g.rates[r.id] || 0) > 0.01) {
-        if (tryGovBuild('storehouse')) return;
+        if (tryGovBuild('storehouse')) return true;
         break;
       }
     }
   }
-  // 4) voda: nedostatečné pokrytí
-  if (auto.water && waterCap(g) < s.pop && tryGovBuild('well')) return;
+  // 8) zaměstnej zbylé nezaměstnané kdekoli (žádná zahálka)
+  let idle = s.pop - sumAssigned(s);
+  if (idle > 0) {
+    for (const def of BUILDINGS) {
+      if (!def.jobs || def.energyOut) continue;
+      const free = slots(g, def.id) - (s.assigned[def.id] || 0);
+      if (free > 0) { setAssign(g, def.id, (s.assigned[def.id] || 0) + Math.min(free, idle)); return true; }
+    }
+  }
+  return false;
+}
+
+/** Stavební cechy: sloučí jednu skupinu 4-v-1 za tick */
+function autoMergeStep(g: Game): boolean {
+  for (let i = 0; i < g.s.buildings.length; i++) {
+    const b = g.s.buildings[i];
+    if (b.big || b.fire || b.dmg || b.build || !MERGEABLE.has(b.t)) continue;
+    if (findMergeGroup(g, i)) { mergeBuildings(g, i); return true; }
+  }
+  return false;
+}
+
+/** Stavební úřad: vylepší jednu budovu s nejnižší úrovní, na kterou je pohodlná rezerva */
+function autoUpgradeStep(g: Game): boolean {
+  let bestIdx = -1, bestLvl = 99;
+  for (let i = 0; i < g.s.buildings.length; i++) {
+    const b = g.s.buildings[i];
+    if (b.fire || b.dmg || b.build) continue;
+    const cost = upgradeCostB(g, i);
+    if (!cost || !upgradeEraOk(g, i)) continue;
+    let ok = true;
+    for (const [r, v] of Object.entries(cost)) if ((g.s.res[r] || 0) < v * 1.5) { ok = false; break; }
+    if (!ok) continue;
+    const lvl = b.lvl || 1;
+    if (lvl < bestLvl) { bestLvl = lvl; bestIdx = i; }
+  }
+  if (bestIdx >= 0) { upgradeBuilding(g, bestIdx); return true; }
+  return false;
 }
 
 function autoAssign(g: Game) {
@@ -654,8 +793,9 @@ function tryRoad(g: Game, tx: number, ty: number) {
 export function buildCost(g: Game, t: string): Rec {
   const def = B[t];
   const n = countB(g, t);
+  const cm = def.wonder ? 1 : g.m.cost; // Divy světa mají pevnou cenu
   const out: Rec = {};
-  for (const [r, v] of Object.entries(def.cost)) out[r] = Math.floor(v * Math.pow(1.12, n));
+  for (const [r, v] of Object.entries(def.cost)) out[r] = Math.max(1, Math.floor(v * Math.pow(1.12, n) * cm));
   return out;
 }
 
@@ -671,6 +811,7 @@ export function pay(g: Game, cost: Rec) {
 function placeBuilding(g: Game, t: string, tx: number, ty: number, auto: boolean) {
   const def = B[t];
   const inst: import('./state').BuildingInst = auto ? { t, x: tx, y: ty, auto: 1 } : { t, x: tx, y: ty };
+  if (def.wonder && def.buildTime) inst.build = def.buildTime;
   g.s.buildings.push(inst);
   const idx = g.s.buildings.length - 1;
   for (let dy = 0; dy < def.size; dy++) for (let dx = 0; dx < def.size; dx++) g.world.occ.set(key(tx + dx, ty + dy), idx);
@@ -679,34 +820,64 @@ function placeBuilding(g: Game, t: string, tx: number, ty: number, auto: boolean
   const adj = computeAdj(g, t, tx, ty, def.size);
   if (adj > 1.001) inst.adj = Math.round(adj * 100) / 100;
   if (t === 'storehouse') recomputeAllHaul(g);
-  if (t === 'trainStation') { recomputeMults(g); recomputeAllHaul(g); layRails(g, inst); }
+  if (t === 'trainStation') { recomputeMults(g); recomputeAllHaul(g); layRailsFor(g, inst); }
   autoConnectRoad(g, tx, ty);
   g.runtime.agentsDirty = true;
   if (!auto && adj > 1.001) bus.emit('adj', { t, mult: adj, label: ADJ_RULES[t]?.label || '' });
 }
 
-/** položí koleje k nejbližšímu jinému nádraží (L-trasa, vyhýbá se vodě a budovám) */
-function layRails(g: Game, st: BuildingInst) {
+/** kotva kolejí pro nádraží — pravý-dolní okraj nádraží (dlaždicové souřadnice, střed dlaždice) */
+function railAnchor(st: BuildingInst): [number, number] { return [st.x + 1, st.y + 2]; }
+
+/** položí koleje z nádraží k nejbližšímu z daných kandidátů a zaznamená polylinii trasy pro vláček */
+function layRailsBetween(g: Game, st: BuildingInst, candidates: BuildingInst[]): boolean {
   let best: BuildingInst | null = null, bd = Infinity;
-  for (const o of g.s.buildings) {
-    if (o === st || o.t !== 'trainStation') continue;
+  for (const o of candidates) {
+    if (o === st) continue;
     const d = Math.abs(o.x - st.x) + Math.abs(o.y - st.y);
     if (d < bd) { bd = d; best = o; }
   }
-  if (!best) return;
+  if (!best) return false;
   const put = (x: number, y: number) => {
     const b = g.world.biomeAt(x, y);
     if (b === B_WATER || b === B_MOUNTAIN) return;
     if (g.world.occ.has(key(x, y))) return;
     g.world.rails.add(key(x, y));
   };
-  let cx = st.x + 1, cy = st.y + 2;
-  const tx2 = best.x + 1, ty2 = best.y + 2;
+  const [ax, ay] = railAnchor(st);
+  const [bx, by] = railAnchor(best);
+  // L-trasa: nejdřív vodorovně, pak svisle (rohový bod = [bx, ay])
+  let cx = ax, cy = ay;
   put(cx, cy);
-  while (cx !== tx2) { cx += Math.sign(tx2 - cx); put(cx, cy); }
-  while (cy !== ty2) { cy += Math.sign(ty2 - cy); put(cx, cy); }
+  while (cx !== bx) { cx += Math.sign(bx - cx); put(cx, cy); }
+  while (cy !== by) { cy += Math.sign(by - cy); put(cx, cy); }
+  // trasa pro vláček — přesně po středech dlaždic, kudy jdou koleje
+  const route: [number, number][] = [[ax, ay]];
+  if (bx !== ax) route.push([bx, ay]);
+  route.push([bx, by]);
+  g.s.railRoutes.push(route);
+  return true;
+}
+
+/** napoj nové nádraží na síť (během hry) */
+function layRailsFor(g: Game, st: BuildingInst) {
+  const others = g.s.buildings.filter(o => o.t === 'trainStation' && o !== st);
+  if (layRailsBetween(g, st, others)) {
+    g.s.rails = [...g.world.rails];
+    bus.emit('railsLaid', {});
+  }
+}
+
+/** znovu postaví celou železniční síť (po načtení hry — sladí koleje i trasy vláčků) */
+export function ensureRailRoutes(g: Game) {
+  const stations = g.s.buildings.filter(b => b.t === 'trainStation');
+  if (stations.length < 2) { g.world.rails.clear(); g.s.rails = []; g.s.railRoutes = []; return; }
+  g.world.rails.clear();
+  g.s.railRoutes = [];
+  for (let i = 0; i < stations.length; i++) {
+    layRailsBetween(g, stations[i], stations.slice(0, i));
+  }
   g.s.rails = [...g.world.rails];
-  bus.emit('railsLaid', {});
 }
 
 // ---------- úrovně budov ----------
@@ -821,7 +992,7 @@ export function demolish(g: Game, idx: number): string | null {
   const sl = slots(g, inst.t);
   if ((s.assigned[inst.t] || 0) > sl) s.assigned[inst.t] = sl;
   if (inst.t === 'storehouse') recomputeAllHaul(g);
-  if (inst.t === 'trainStation') recomputeMults(g);
+  if (inst.t === 'trainStation') { recomputeMults(g); recomputeAllHaul(g); ensureRailRoutes(g); }
   g.runtime.agentsDirty = true;
   bus.emit('demolished', { t: inst.t, refund });
   return null;
@@ -943,6 +1114,11 @@ export function buyUpgrade(g: Game, u: string): string | null {
   if (!canAfford(g, cost)) return 'err.res';
   pay(g, cost);
   g.s.upgrades[u] = lvl + 1;
+  // Guvernér: zapni rozumné výchozí přepínače (ať „to prostě funguje")
+  if (def.fx.special === 'governor') {
+    const a = g.s.auto;
+    for (const k of ['food', 'wood', 'water', 'housing', 'industry', 'science', 'store']) if (a[k] === undefined) a[k] = true;
+  }
   recomputeMults(g);
   bus.emit('upgrade', def);
   return null;

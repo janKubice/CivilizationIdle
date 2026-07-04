@@ -46,6 +46,7 @@ function migrate(s: any): GameState | null {
   s.nodeDelta = s.nodeDelta || {};
   s.roads = s.roads || [];
   s.rails = s.rails || [];
+  s.railRoutes = s.railRoutes || [];
   s.achs = s.achs || [];
   s.techs = s.techs || [];
   s.upgrades = s.upgrades || {};

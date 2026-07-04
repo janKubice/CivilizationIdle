@@ -35,15 +35,17 @@ const CS_UI: Record<string, string> = {
   't.build': '🏗️ Stavby', 't.work': '👷 Pracovníci', 't.store': '📦 Sklad', 't.tech': '🔬 Technologie', 't.upg': '💡 Vylepšení', 't.ach': '🏆 Úspěchy', 't.asc': '✨ Vzestup',
   // build panel
   'build.info': 'Vyber budovu a klikni do mapy. <b>Esc</b>/pravé tl. zruší.',
-  'build.slots': '{0} místa/ks', 'build.housing': '+{0} bydlení', 'build.water': '+{0} voda',
+  'build.slots': '{0} místa/ks', 'build.housing': '+{0} bydlení', 'build.water': '+{0} voda', 'build.wonder': '⏳ stavba {0} s',
   'build.btn': 'Postavit', 'build.cancel': '✕ Zrušit výběr',
-  'cat.all': 'Vše', 'cat.city': '🏠 Město', 'cat.food': '🌾 Jídlo', 'cat.mine': '⛏️ Těžba', 'cat.ind': '🏭 Výroba', 'cat.other': '🎓 Ostatní',
+  'cat.all': 'Vše', 'cat.city': '🏠 Město', 'cat.food': '🌾 Jídlo', 'cat.mine': '⛏️ Těžba', 'cat.ind': '🏭 Výroba', 'cat.other': '🎓 Ostatní', 'cat.wonder': '🗿 Divy',
   // work panel
   'work.idle': '😴 Nezaměstnaní: <b>{0}</b> / {1}', 'work.foreman': '👷 Předák aktivní',
   'work.empty': 'Postav budovy s pracovními místy (tábor, chýše, lom…) a přiřaď lidem práci.',
   // storage panel
   'store.head': 'Surovina · zásoba / kapacita · produkce',
   'store.full': 'plno za {0}', 'store.empty2': 'prázdno za {0}', 'store.nocap': 'bez limitu',
+  'store.chainHint': 'Klikni: kde se surovina vyrábí a spotřebovává',
+  'chain.made': 'Vyrábí se v:', 'chain.used': 'Spotřebovává se v:', 'chain.none': '— zatím nikde —',
   // tech panel
   'tech.res': '🔬 Věda: <b>{0}</b> ({1})', 'tech.era': 'Éra {0} — {1}', 'tech.req': 'Vyžaduje: {0}',
   'tech.buy': 'Vyzkoumat', 'tech.done': '🔬 Vyzkoumáno: <b>{0}</b>',
@@ -72,7 +74,7 @@ const CS_UI: Record<string, string> = {
   'title.sub': 'Od prvního kamene k laserovým těžebním puškám.<br>Klikej, stav, zkoumej — a nech své lidičky makat.',
   'title.continue': '▶ Pokračovat', 'title.new': '✦ Nová hra',
   'title.newConfirm': 'Opravdu začít znovu? Současný postup (kromě nastavení) bude smazán, včetně Vzestupů.',
-  'title.newGo': 'Začít znovu', 'title.foot': 'v0.2 · vše se ukládá automaticky · funguje offline',
+  'title.newGo': 'Začít znovu', 'title.foot': 'v0.5 „Megalomanie" · vše se ukládá automaticky · funguje offline',
   // settings
   'set.title': '⚙️ Nastavení', 'set.sfx': '🔊 Zvuky', 'set.music': '🎵 Hudba', 'set.particles': '✨ Particly', 'set.daynight': '🌙 Denní cyklus',
   'set.lang': '🌍 Jazyk', 'set.transfer': '<b>Přenos uložené hry</b>', 'set.export': '📤 Export', 'set.import': '📥 Import',
@@ -114,6 +116,8 @@ const CS_UI: Record<string, string> = {
   'toast.gov': '🏛️ Guvernér nechal postavit: {0}',
   'auto.title': 'Guvernér staví sám:', 'auto.food': 'Jídlo (farmy/sběrači při nedostatku)', 'auto.wood': 'Dřevo (tábory při nedostatku)',
   'auto.store': 'Sklady (když něco přetéká)', 'auto.water': 'Studny (když chybí voda)',
+  'auto.housing': 'Bydlení (staví nejlepší dostupné domy)', 'auto.industry': 'Výroba (zpracuje přebytky surovin na vyšší)', 'auto.science': 'Věda (knihovny a učenci)',
+  'toast.wonder': '✨ DIV SVĚTA dostavěn: {0}! Cítíš tu sílu?',
   'binfo.lvl': 'Úroveň: {0}', 'binfo.lvlUp': 'Vylepšit na {0}',
   'binfo.big': '★ Velká budova (4-v-1): sloty ×4 a +50 % výkon',
   'binfo.merge': '🔗 Sloučit 4 do velké budovy', 'binfo.split': '✂️ Rozdělit zpět na 4',

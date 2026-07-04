@@ -6,7 +6,7 @@ import { clamp, bus } from './util';
 import { Game, newState, initGame } from './state';
 import {
   recomputeMults, tick, slowTick, makeSimRand, gather, tryBuild,
-  collectGolden, computeOffline, freshRun, extinguishClick,
+  collectGolden, computeOffline, freshRun, extinguishClick, ensureRailRoutes,
 } from './sim';
 import { Renderer } from './render';
 import { initUI, uiFrame, showTitle, showOffline, openPanel, toast, showBuildingInfo } from './ui';
@@ -21,6 +21,7 @@ const g = {} as Game;
 const saved = loadState();
 initGame(g, saved ?? newState((Math.random() * 2 ** 31) | 0));
 recomputeMults(g);
+ensureRailRoutes(g);
 const lang0 = (g.s.settings.lang as Lang) || detectLang();
 g.s.settings.lang = lang0;
 setLang(lang0);
@@ -39,6 +40,7 @@ initUI(g, {
   onImport: (st) => {
     initGame(g, st);
     recomputeMults(g);
+    ensureRailRoutes(g);
     setLang((g.s.settings.lang as Lang) || detectLang());
     bus.emit('worldReset');
     openPanel(null);
@@ -50,6 +52,7 @@ initUI(g, {
 // debug / testy (a konzolové experimenty — je to singleplayer, cheaty jsou věc hráče)
 (window as any).G = g;
 import('./sim').then(sim => { (window as any).SIM = sim; });
+import('./data').then(data => { (window as any).DATA = data; });
 
 // ---------- title ----------
 showTitle(!!saved, (fresh) => {

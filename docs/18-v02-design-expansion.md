@@ -229,3 +229,15 @@ Godgame nástroje za energii (éra 6–7), řeší i „špatný seed":
 Každá fáze končí buildem jednoho HTML, testy (smoke/features/endgame + nové), botím balanc-passem a pushem.
 
 **Poznámka k i18n (bod 1):** všechny texty se přesunou do slovníků `src/i18n/{cs,en,de,fr}.ts` s klíči; data (budovy/techy/achievementy) dostanou překladové klíče místo přímých textů. Přepínač jazyka na title screenu i v nastavení, volba uložená v settings, výchozí dle prohlížeče. Čísla formátovaná dle locale.
+
+---
+
+## Addendum 2 — feedback po v0.4 (řeší se ve v0.5 „Megalomanie")
+
+1. **Auto-slučování** ⚙️: upgrade *Stavební cechy* (éra 3) — město samo slučuje 4 stejné budovy ve čtverci do velkých (1/s, s toastem).
+2. **Guvernér 2.0** 🐛⚙️: dosavadní auto-stavěč řešil jen jídlo/dřevo/sklady/studny → hráč skončil s plnými sklady a nedostatkem výroby a bydlení. Rozšíření: až **3 akce za sekundu**, nové přepínače **🏠 bydlení** (staví nejlepší odemčené bydlení, když dochází) a **🏭 výroba** (když surovina přetéká, postaví budovu, která ji spotřebovává — plné dřevo → pila, plná ruda → huť…), **🔬 věda**. Nejdřív obsazuje sloty, pak staví.
+3. **Auto-vylepšovač** ⚙️: upgrade *Stavební úřad* (éra 3) — automaticky zvyšuje úrovně budov, když je na to (s rezervou).
+4. **🐛 Vlak mimo koleje**: trasy vlaků se odvozovaly z pořadí nádraží v poli, koleje ale z nejbližšího souseda + půl-dlaždicový offset kotev. Fix: při pokládce kolejí se **uloží trasa** (railRoutes v save) a vlak jede přesně po ní (středy dlaždic).
+5. **Čitelnost řetězců** 🎨: klik na surovinu v panelu Sklad otevře **výrobní řetězec** — co ji vyrábí (s receptem), co ji spotřebovává, případně jaký tech to odemyká; karty budov nově ukazují recept ikonami (🪵→🟫).
+
+**Megalomanie (jádro v0.5):** činžák (+30) → panelák (+100) → **arkologie (+1000 bydlení)**, růst populace škáluje s érou (×1+0,5/éra) → města v desítkách tisíc; tech *Průmyslové zemědělství* (farmy ×6, skleníky ruší zimu); **jaderná elektrárna** ☢️ s chladicími věžemi; tech *Automobily* — **auta a náklaďáky jezdí po silnicích**, silnice se v éře 4+ mění na **asfalt s pruhy**; **divy světa** se stavbou v čase (lešení → ohňostroj): Velká pyramida (klik ×2), Ocelová věž (stavby −15 %, produkce ×1,2), Vesmírný výtah (produkce ×2, věda ×1,5). Nové achievementy: Velkoměsto (10 000), Sedmý div, Atomový věk.

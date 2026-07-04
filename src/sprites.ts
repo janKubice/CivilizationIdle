@@ -238,6 +238,100 @@ export function makeSprites() {
     x.beginPath(); x.moveTo(24, 66); x.lineTo(29, 16); x.lineTo(35, 16); x.lineTo(40, 66); x.closePath(); x.fill();
     x.fillStyle = '#ffd777'; x.beginPath(); x.moveTo(29, 16); x.lineTo(32, 6); x.lineTo(35, 16); x.closePath(); x.fill();
   });
+
+  // ---- moderní bydlení a energie (megalomanie) ----
+  sprites.aptBlock = c(32, 44, x => {
+    box(x, 6, 12, 20, 26, '#c2b09a');
+    x.fillStyle = '#8d7a56'; x.fillRect(6, 12, 20, 2);
+    x.fillStyle = '#5b6b7a';
+    for (let r = 0; r < 5; r++) for (let cc = 0; cc < 3; cc++) x.fillRect(9 + cc * 6, 16 + r * 4.4, 4, 3);
+    x.fillStyle = '#4a3820'; x.fillRect(14, 33, 5, 5);
+  });
+  sprites.towerBlock = c(32, 44, x => {
+    box(x, 7, 4, 18, 34, '#aeb6be');
+    x.fillStyle = '#8f98a2'; x.fillRect(7, 4, 18, 3);
+    x.fillStyle = '#3a4650';
+    for (let r = 0; r < 8; r++) for (let cc = 0; cc < 3; cc++) x.fillRect(9.5 + cc * 5.3, 9 + r * 3.5, 3.5, 2.4);
+    x.fillStyle = '#c8ced8'; x.fillRect(15, 1, 2, 4); // anténa
+  });
+  sprites.arcology = c(64, 80, x => {
+    // stupňovitá megastruktura s kupolí
+    box(x, 6, 46, 52, 30, '#6b7a8c');
+    box(x, 12, 30, 40, 18, '#7d8ea0');
+    box(x, 20, 18, 24, 14, '#8fa0b2');
+    x.fillStyle = '#2a3b4a';
+    for (let r = 0; r < 6; r++) for (let cc = 0; cc < 10; cc++) x.fillRect(9 + cc * 4.8, 49 + r * 4, 3, 2.6);
+    for (let r = 0; r < 3; r++) for (let cc = 0; cc < 7; cc++) x.fillRect(15 + cc * 5, 33 + r * 4, 3, 2.6);
+    // skleněná kupole
+    x.fillStyle = 'rgba(150,220,235,.6)'; x.beginPath(); x.arc(32, 18, 12, Math.PI, 0); x.fill();
+    x.strokeStyle = '#bfe6ef'; x.lineWidth = 1; x.beginPath(); x.arc(32, 18, 12, Math.PI, 0); x.stroke();
+    x.fillStyle = '#6fd8c8'; x.beginPath(); x.arc(32, 10, 2.5, 0, 7); x.fill(); // světlo na vrcholu
+    x.fillStyle = '#3a4a58'; for (let i = 0; i < 12; i++) x.fillRect(4 + i * 5, 76, 3, 3); // základna
+  });
+  sprites.nuclearPlant = c(64, 80, x => {
+    box(x, 4, 50, 56, 26, '#8d939c');
+    windowPair(x, 8, 58); windowPair(x, 30, 58);
+    // dvě chladicí věže (hyperboloid)
+    for (const cx0 of [20, 44]) {
+      x.fillStyle = '#c2c8d0';
+      x.beginPath();
+      x.moveTo(cx0 - 10, 50); x.quadraticCurveTo(cx0 - 4, 34, cx0 - 7, 20);
+      x.lineTo(cx0 + 7, 20); x.quadraticCurveTo(cx0 + 4, 34, cx0 + 10, 50);
+      x.closePath(); x.fill();
+      x.fillStyle = '#a8aeb8'; x.fillRect(cx0 - 7, 20, 14, 2);
+    }
+    x.fillStyle = '#3fcf6a'; x.beginPath(); x.arc(32, 62, 3.5, 0, 7); x.fill(); // atomový symbol
+    x.strokeStyle = '#3fcf6a'; x.lineWidth = 1;
+    for (let i = 0; i < 3; i++) { x.beginPath(); x.ellipse(32, 62, 5.5, 2.2, i * Math.PI / 3, 0, 7); x.stroke(); }
+  });
+
+  // ---- Divy světa (3×3 => 96×132) ----
+  sprites.pyramid = c(96, 132, x => {
+    x.fillStyle = '#00000018'; x.beginPath(); x.ellipse(48, 122, 44, 8, 0, 0, 7); x.fill();
+    // pyramida z kvádrů
+    x.fillStyle = '#d8c48a';
+    x.beginPath(); x.moveTo(10, 122); x.lineTo(48, 22); x.lineTo(86, 122); x.closePath(); x.fill();
+    x.fillStyle = '#c2ac6e'; // stinná strana
+    x.beginPath(); x.moveTo(48, 22); x.lineTo(86, 122); x.lineTo(48, 122); x.closePath(); x.fill();
+    x.strokeStyle = '#00000020'; x.lineWidth = 1;
+    for (let i = 1; i < 9; i++) { const y = 22 + i * 11; const w = (y - 22) / 100 * 38; x.beginPath(); x.moveTo(48 - w, y); x.lineTo(48 + w, y); x.stroke(); }
+    x.fillStyle = '#ffe58a'; x.beginPath(); x.moveTo(48, 22); x.lineTo(53, 34); x.lineTo(43, 34); x.closePath(); x.fill(); // zlatý vrchol
+  });
+  sprites.steelTower = c(96, 132, x => {
+    x.fillStyle = '#00000018'; x.beginPath(); x.ellipse(48, 124, 40, 7, 0, 0, 7); x.fill();
+    x.strokeStyle = '#8a6b42'; x.lineWidth = 3;
+    // čtyři nohy sbíhající se nahoru
+    x.beginPath(); x.moveTo(14, 124); x.lineTo(42, 18); x.moveTo(82, 124); x.lineTo(54, 18); x.stroke();
+    x.beginPath(); x.moveTo(30, 124); x.lineTo(45, 40); x.moveTo(66, 124); x.lineTo(51, 40); x.stroke();
+    // oblouk a plošiny
+    x.lineWidth = 2;
+    x.beginPath(); x.moveTo(22, 104); x.quadraticCurveTo(48, 88, 74, 104); x.stroke();
+    x.fillStyle = '#9a7b52';
+    x.fillRect(34, 62, 28, 4); x.fillRect(40, 40, 16, 4);
+    // příhradová výplň
+    x.lineWidth = 1;
+    for (let i = 0; i < 6; i++) { x.beginPath(); x.moveTo(30 + i * 3, 124 - i * 2); x.lineTo(66 - i * 3, 124 - i * 2); x.stroke(); }
+    // špička
+    x.strokeStyle = '#9a7b52'; x.lineWidth = 2; x.beginPath(); x.moveTo(48, 40); x.lineTo(48, 10); x.stroke();
+    x.fillStyle = '#ffd74a'; x.beginPath(); x.arc(48, 9, 2.5, 0, 7); x.fill();
+  });
+  sprites.spaceElevator = c(96, 132, x => {
+    x.fillStyle = '#00000018'; x.beginPath(); x.ellipse(48, 124, 34, 7, 0, 0, 7); x.fill();
+    // základna
+    box(x, 30, 104, 36, 20, '#5f7d94');
+    x.fillStyle = '#9fd8e8'; x.fillRect(36, 110, 24, 6);
+    // stožár k nebi
+    const grad = x.createLinearGradient(48, 0, 48, 110);
+    grad.addColorStop(0, '#bfe6ef'); grad.addColorStop(1, '#7d94a4');
+    x.fillStyle = grad; x.fillRect(44, 4, 8, 104);
+    x.strokeStyle = '#cfeef7'; x.lineWidth = 1; x.beginPath(); x.moveTo(46, 6); x.lineTo(46, 108); x.stroke();
+    // stoupající kabina
+    x.fillStyle = '#ffd74a'; x.fillRect(41, 44, 14, 9);
+    x.strokeStyle = '#e0b93a'; x.strokeRect(41.5, 44.5, 13, 8);
+    // protizávaží / stanice na vrcholu
+    x.fillStyle = '#6fd8c8'; x.beginPath(); x.arc(48, 6, 6, 0, 7); x.fill();
+    x.fillStyle = '#bfe6ef'; x.beginPath(); x.arc(48, 6, 3, 0, 7); x.fill();
+  });
   // ---- parky a dekorace ----
   sprites.park = c(32, 44, x => {
     x.fillStyle = '#4a8040'; x.fillRect(3, 26, 26, 12);
@@ -317,7 +411,7 @@ export function makeSprites() {
       x.fillStyle = '#e88a2a'; x.beginPath(); x.arc(32, 64, 3, 0, 7); x.fill();
     },
   };
-  for (const t of ['farm', 'hut', 'house', 'forestCamp', 'gatherHut', 'quarry', 'sawmill', 'copperMine', 'ironMine', 'coalMine', 'library', 'market']) {
+  for (const t of ['farm', 'hut', 'house', 'aptBlock', 'towerBlock', 'forestCamp', 'gatherHut', 'quarry', 'sawmill', 'copperMine', 'ironMine', 'coalMine', 'library', 'market', 'brickworks', 'smelter', 'ironworks', 'steelworks']) {
     sprites['big:' + t] = c(64, 80, x => {
       if (bigCustom[t]) { bigCustom[t](x); return; }
       // generická velká budova: podesta + zvětšený model + prapor
@@ -341,4 +435,8 @@ export const NIGHT_WINDOWS: Record<string, [number, number][]> = {
   factory: [[10, 52], [28, 52], [44, 52]],
   hitechLab: [[10, 24], [18, 24]],
   temple: [[14, 28]],
+  aptBlock: [[9, 16], [15, 16], [21, 16], [9, 25], [15, 25], [21, 25], [9, 33], [21, 33]],
+  towerBlock: [[9, 9], [15, 9], [20, 9], [9, 20], [15, 20], [20, 20], [9, 30], [20, 30]],
+  arcology: [[10, 50], [20, 50], [30, 50], [40, 50], [15, 34], [25, 34], [35, 34]],
+  nuclearPlant: [[8, 58], [16, 58], [30, 58], [38, 58]],
 };
