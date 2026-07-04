@@ -1,4 +1,4 @@
-# Civilization Idle — itch.io page kit
+# Civdle — itch.io page kit
 
 Everything you need to paste into your itch.io project. English is the primary
 copy; a Czech version follows. Screenshots + cover are in this folder.
@@ -9,7 +9,7 @@ copy; a Czech version follows. Screenshots + cover are in this folder.
 
 | Field | Value |
 |---|---|
-| **Title** | Civilization Idle |
+| **Title** | Civdle |
 | **Short description / tagline** | From the first stone to orbital lasers — an idle city that builds itself on an infinite map. |
 | **Classification** | Game |
 | **Kind of project** | HTML (play in browser) |
@@ -35,7 +35,7 @@ copy; a Czech version follows. Screenshots + cover are in this folder.
 
 ## 3) Full description (paste into the page body)
 
-**Civilization Idle** is a cozy-but-deep idle city-builder that runs in your
+**Civdle** is a cozy-but-deep idle city-builder that runs in your
 browser. Start by clicking trees and rocks for your first resources, raise a few
 huts, and put your people to work. From there your settlement grows on its own —
 into a village, a town, a metropolis, and finally a laser-age **Ecumenopolis** that
@@ -102,7 +102,7 @@ autosaves** as you play.
 
 ## 5) Uploading the HTML build to itch.io
 
-1. Upload `civilization-idle.html` (rename to `index.html` first, or zip it with
+1. Upload `civdle.html` (rename to `index.html` first, or zip it with
    that name — itch runs `index.html` automatically).
 2. Tick **"This file will be played in the browser"**.
 3. Set the viewport to about **1280 × 800**, and enable **"Fullscreen button"** and
@@ -120,7 +120,7 @@ autosaves** as you play.
 
 **Plný popis:**
 
-**Civilization Idle** je útulné, ale hluboké idle budování města přímo v prohlížeči.
+**Civdle** je útulné, ale hluboké idle budování města přímo v prohlížeči.
 Začneš klikáním na stromy a kameny pro první suroviny, postavíš pár chatrčí a pošleš
 lidi do práce. Odtud město roste samo — ve vesnici, město, metropoli a nakonec
 laserovou **Ekumenopoli** rozlévající se přes nekonečný, procedurálně generovaný svět.

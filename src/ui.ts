@@ -179,7 +179,7 @@ export function showTitle(cont: boolean, onStart: (fresh: boolean) => void) {
     }
   };
   const renderContent = () => {
-    content.innerHTML = `<h1>Civilization Idle</h1><div class="sub">${t('title.sub')}</div>`;
+    content.innerHTML = `<h1>Civdle</h1><div class="sub">${t('title.sub')}</div>`;
     if (cont) {
       const b = el('button', '', t('title.continue')) as HTMLButtonElement;
       b.onclick = () => { wrap.remove(); onStart(false); };

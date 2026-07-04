@@ -1,4 +1,4 @@
-# Civilization Idle
+# Civdle
 
 > 2D top-down idle klikačka o růstu civilizace — od sbírání kamene rukama až po těžbu laserovými puškami a přepravu vrtulníky.
 
@@ -19,7 +19,7 @@ Repozitář obsahuje **hratelnou hru** (TypeScript + Vite, exportovatelnou jako 
 
 ## Co to je
 
-Civilization Idle je incremental / idle hra z pohledu shora (top-down). Hráč začíná s pár lidmi na okraji teoreticky nekonečné mapy, klikáním sbírá suroviny, staví budovy a přitahuje další obyvatele. Každý človíček je samostatný „zdroj", který umí chodit, těžit a pracovat. Plněním potřeb civilizace se město **organicky rozrůstá**, odemyká se tech tree (od doby kamenné po budoucnost), upgrady se skládají do silných synergií a po dosažení určitého milníku lze provést **ascension** (prestige reset) za trvalé bonusy.
+Civdle je incremental / idle hra z pohledu shora (top-down). Hráč začíná s pár lidmi na okraji teoreticky nekonečné mapy, klikáním sbírá suroviny, staví budovy a přitahuje další obyvatele. Každý človíček je samostatný „zdroj", který umí chodit, těžit a pracovat. Plněním potřeb civilizace se město **organicky rozrůstá**, odemyká se tech tree (od doby kamenné po budoucnost), upgrady se skládají do silných synergií a po dosažení určitého milníku lze provést **ascension** (prestige reset) za trvalé bonusy.
 
 Podrobná vize je v [`docs/00-vision-and-pillars.md`](docs/00-vision-and-pillars.md).
 
