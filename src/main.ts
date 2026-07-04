@@ -51,6 +51,7 @@ initUI(g, {
 
 // debug / testy (a konzolové experimenty — je to singleplayer, cheaty jsou věc hráče)
 (window as any).G = g;
+(window as any).R = renderer;
 import('./sim').then(sim => { (window as any).SIM = sim; });
 import('./data').then(data => { (window as any).DATA = data; });
 
